@@ -7377,13 +7377,15 @@ ${tl.length?`<!-- Timeline -->
         // Ouve mudanças de autenticação — registrado UMA única vez
         supa.auth.onAuthStateChange(async (event, session) => {
           console.log('[Auth] evento:', event, session?.user?.email);
-          if (event === 'SIGNED_IN' && session) {
+          if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+            // Tanto login novo quanto reload de página com sessão ativa
             await this._onLogin(session.user);
           } else if (event === 'SIGNED_OUT') {
             this._iniciado = false;
+            this._carregando = false;
             this._mostrarTelaAuth();
-          } else if (event === 'INITIAL_SESSION') {
-            if (!session) this._mostrarTelaAuth();
+          } else if (event === 'INITIAL_SESSION' && !session) {
+            this._mostrarTelaAuth();
           } else if (event === 'TOKEN_REFRESHED' && session) {
             // Apenas atualiza o usuário, não recarrega tudo
             this.user = session.user;
