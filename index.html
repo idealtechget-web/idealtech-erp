@@ -2311,33 +2311,67 @@
           App.ui.mostrarToast('Backup exportado!','sucesso');
         },
 
-        importarBackup() {
+        async importarBackup() {
           const fi = document.getElementById('importBackupFile');
           if (!fi.files.length) { App.ui.mostrarToast('Selecione um arquivo JSON','erro'); return; }
           const reader = new FileReader();
-          reader.onload = e => {
+          reader.onload = async e => {
             try {
               const bk = JSON.parse(e.target.result);
-              if (!confirm('Isso substituirá TODOS os dados atuais. Continuar?')) return;
-              if (bk.produtos)       App.state.produtos       = bk.produtos;
-              if (bk.servicos)       App.state.servicos       = bk.servicos;
-              if (bk.osLista)        App.state.osLista        = bk.osLista;
-              if (bk.gastos)         App.state.gastos         = bk.gastos;
-              if (bk.recebimentos)   App.state.recebimentos   = bk.recebimentos;
-              if (bk.clientes)       App.state.clientes       = bk.clientes;
-              if (bk.orcamentos)     App.state.orcamentos     = bk.orcamentos;
-              if (bk.contas)         App.state.contas         = bk.contas;
-              if (bk.categorias)     App.state.categorias     = bk.categorias;
+              if (!confirm('Isso substituirá TODOS os dados atuais no servidor. Continuar?')) return;
+
+              App.ui.mostrarLoading();
+              const uid = Auth.user?.id;
+              if (!uid) { App.ui.mostrarToast('Usuário não autenticado','erro'); App.ui.esconderLoading(); return; }
+
+              // Apaga dados atuais do Supabase
+              await Promise.all([
+                supa.from('os').delete().eq('user_id', uid),
+                supa.from('receitas').delete().eq('user_id', uid),
+                supa.from('despesas').delete().eq('user_id', uid),
+                supa.from('produtos').delete().eq('user_id', uid),
+                supa.from('servicos').delete().eq('user_id', uid),
+                supa.from('clientes').delete().eq('user_id', uid),
+                supa.from('orcamentos').delete().eq('user_id', uid),
+                supa.from('contas').delete().eq('user_id', uid),
+                supa.from('categorias').delete().eq('user_id', uid),
+              ]);
+
+              // Importa cada entidade para o Supabase
+              const salvar = async (itens, fn) => {
+                if (!itens || !itens.length) return;
+                for (const item of itens) {
+                  // Remove o id antigo para deixar o Supabase gerar um novo UUID
+                  const { id, ...semId } = item;
+                  await fn({ ...semId });
+                }
+              };
+
+              await salvar(bk.clientes,     (c) => DB.salvarCliente(c));
+              await salvar(bk.contas,        (c) => DB.salvarConta({ ...c, saldoInicial: c.saldoInicial||c.saldo_inicial||0 }));
+              await salvar(bk.categorias,    (c) => DB.salvarCategoria(c));
+              await salvar(bk.produtos,      (p) => DB.salvarProduto(p));
+              await salvar(bk.servicos,      (s) => DB.salvarServico(s));
+              await salvar(bk.osLista,       (o) => DB.salvarOS({ ...o, formaPagamento: o.formaPagamento||o.forma_pagamento||'' }));
+              await salvar(bk.orcamentos,    (o) => DB.salvarOrcamento(o));
+              await salvar(bk.recebimentos,  (r) => DB.salvarReceita({ ...r, formaPagamento: r.formaPagamento||r.forma_pagamento||'Pix' }));
+              await salvar(bk.gastos,        (g) => DB.salvarDespesa(g));
+
+              // Salva configurações/perfil
               if (bk.configuracoes) {
-                App.state.configuracoes = bk.configuracoes;
-                App.config.limiteMEI   = bk.configuracoes.limiteMEI || 81000;
+                await DB.salvarPerfil(bk.configuracoes);
               }
-              App._saveAll();
-              App.renderizarTudo();
-              App.ui.mostrarToast('Backup restaurado!','sucesso');
+
+              // Recarrega tudo do banco
+              await DB.carregarTudo();
+              App.init();
+              App.ui.esconderLoading();
+              App.ui.mostrarToast('Backup restaurado com sucesso!','sucesso');
               this.fecharModalBackup();
             } catch(err) {
-              App.ui.mostrarToast('Erro ao ler backup: ' + err.message,'erro');
+              App.ui.esconderLoading();
+              App.ui.mostrarToast('Erro ao importar backup: ' + err.message,'erro');
+              console.error('importarBackup erro:', err);
             }
           };
           reader.readAsText(fi.files[0]);
@@ -4874,7 +4908,7 @@ ${osRows ? `
         gerarImpressao(tipo, formato) {
           const id  = document.getElementById('printOsId').value;
           const os  = App.state.osLista.find(x => String(x.id) === String(id));
-          if (!os) return;
+          if (!os) { App.ui.mostrarToast('OS não encontrada. Tente fechar e abrir o modal novamente.','erro'); return; }
           const cfg = App.state.configuracoes;
           const pa  = document.getElementById('print-area');
           if (formato === 'TERMICA') {
@@ -5519,9 +5553,9 @@ ${osRows ? `
           return os;
         },
 
-        salvarEImprimirRecibo() {
-          const os = this.salvar();
-          if (os) this.abrirModalPrint(os.id);
+        async salvarEImprimirRecibo() {
+          const os = await this.salvar();
+          if (os && os.id) this.abrirModalPrint(os.id);
         },
 
         _renderHistoricoAtualizacoes(atualizacoes) {
