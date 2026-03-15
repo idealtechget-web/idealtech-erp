@@ -6,12 +6,6 @@
   <title>IDEAL ERP MEI PRO — IdealTech</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    // ── Supabase config ──────────────────────────────────────
-    const SUPA_URL = "https://lcycmvcadunkzsdmwsvk.supabase.co";
-    const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjeWNtdmNhZHVua3pzZG13c3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODg2NDEsImV4cCI6MjA4OTE2NDY0MX0.2K7dEilbD5QRYjuCX8vuKhMCWn6wow8mQWbuH-nTEy8";
-    const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
-  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
@@ -1769,6 +1763,7 @@
        SCRIPT PRINCIPAL
        ═══════════════════════════════════════════════════════════════════ -->
   <script>
+  document.addEventListener('DOMContentLoaded', function() {
   (function () {
     'use strict';
 
@@ -7356,6 +7351,11 @@ ${tl.length?`<!-- Timeline -->
     }
 
     // Inicia ERP normalmente
+    // ── Supabase init (dentro do IIFE, após todos os scripts carregarem) ──
+    const SUPA_URL = "https://lcycmvcadunkzsdmwsvk.supabase.co";
+    const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjeWNtdmNhZHVua3pzZG13c3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODg2NDEsImV4cCI6MjA4OTE2NDY0MX0.2K7dEilbD5QRYjuCX8vuKhMCWn6wow8mQWbuH-nTEy8";
+    const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
     // ══════════════════════════════════════════════════════════════════════
     // AUTH — Autenticação Supabase
     // ══════════════════════════════════════════════════════════════════════
@@ -7363,17 +7363,17 @@ ${tl.length?`<!-- Timeline -->
       user: null,
 
       async init() {
-        // Verifica sessão existente
-        const { data: { session } } = await supa.auth.getSession();
-        if (session) {
-          await this._onLogin(session.user);
-        } else {
-          this._mostrarTelaAuth();
-        }
-        // Ouve mudanças de sessão
+        // Mostra tela de login imediatamente
+        this._mostrarTelaAuth();
+
+        // Ouve mudanças de autenticação (login/logout/sessão existente)
         supa.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'SIGNED_IN'  && session) await this._onLogin(session.user);
-          if (event === 'SIGNED_OUT') this._mostrarTelaAuth();
+          console.log('[Auth] evento:', event, session?.user?.email);
+          if (event === 'SIGNED_IN' && session) {
+            await this._onLogin(session.user);
+          } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION' && !session) {
+            this._mostrarTelaAuth();
+          }
         });
       },
 
@@ -7771,8 +7771,13 @@ ${tl.length?`<!-- Timeline -->
     // ══════════════════════════════════════════════════════════════════════
     // INICIA — Auth primeiro, depois App
     // ══════════════════════════════════════════════════════════════════════
+    // Expor no escopo global para os onclick do HTML
+    window.Auth = Auth;
+    window.DB   = DB;
+
     Auth.init();
   })();
+  }); // DOMContentLoaded
   </script>
   <!-- MODAL IMPORTAR OFX -->
   <div id="modalOFX" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4">
