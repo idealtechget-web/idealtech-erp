@@ -7418,6 +7418,17 @@ ${tl.length?`<!-- Timeline -->
       async sair() {
         if (!confirm('Deseja sair do sistema?')) return;
         await supa.auth.signOut();
+        this.user = null;
+        this._mostrarTelaAuth();
+        // Limpar estado
+        App.state.produtos = []; App.state.servicos = []; App.state.osLista = [];
+        App.state.gastos = []; App.state.recebimentos = []; App.state.clientes = [];
+        App.state.orcamentos = []; App.state.contas = []; App.state.categorias = [];
+        App.state.configuracoes = { nome:'', telefone:'', cnpj:'', endereco:'', logo:'', limiteMEI: 81000 };
+        // Resetar formulário de login
+        document.getElementById('loginEmail').value = '';
+        document.getElementById('loginSenha').value = '';
+        Auth.mostrarAba('login');
       },
 
       async _onLogin(user) {
