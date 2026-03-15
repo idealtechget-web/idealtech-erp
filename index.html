@@ -7461,14 +7461,18 @@ ${tl.length?`<!-- Timeline -->
         this._loading('Carregando seus dados...');
 
         try {
-          await DB.carregarTudo();
+          // Timeout de 10 segundos — se travar, abre mesmo assim
+          await Promise.race([
+            DB.carregarTudo(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+          ]);
         } catch(e) {
-          console.error('[Auth] Erro ao carregar dados:', e);
+          console.error('[Auth] Erro ao carregar dados:', e.message);
         } finally {
           this._carregando = false;
         }
 
-        // Dados prontos — mostra o ERP
+        // Dados prontos (ou timeout) — mostra o ERP
         this._loading(false);
         document.getElementById('usuarioEmail').textContent = user.email;
         document.getElementById('barraUsuario').classList.remove('hidden');
@@ -7533,10 +7537,12 @@ ${tl.length?`<!-- Timeline -->
         // Busca segura — falha individual não quebra o resto
         const q = async (tabela, coluna='user_id') => {
           try {
+            console.log(`[DB] buscando ${tabela}...`);
             const { data, error } = coluna === 'id'
               ? await supa.from(tabela).select('*').eq('id', uid).single()
               : await supa.from(tabela).select('*').eq(coluna, uid);
-            if (error) { console.warn(`[DB] ${tabela}:`, error.message); return null; }
+            if (error) { console.warn(`[DB] ${tabela} erro:`, error.message); return null; }
+            console.log(`[DB] ${tabela} ok — ${Array.isArray(data)?data.length:1} registro(s)`);
             return data;
           } catch(e) { console.warn(`[DB] ${tabela} exception:`, e); return null; }
         };
