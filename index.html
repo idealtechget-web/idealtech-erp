@@ -7362,17 +7362,25 @@ ${tl.length?`<!-- Timeline -->
     const Auth = {
       user: null,
 
+      _iniciado: false,
+
       async init() {
-        // Mostra tela de login imediatamente
+        // Mostra tela de login imediatamente enquanto verifica sessão
         this._mostrarTelaAuth();
 
-        // Ouve mudanças de autenticação (login/logout/sessão existente)
+        // Ouve mudanças de autenticação — registrado UMA única vez
         supa.auth.onAuthStateChange(async (event, session) => {
           console.log('[Auth] evento:', event, session?.user?.email);
           if (event === 'SIGNED_IN' && session) {
             await this._onLogin(session.user);
-          } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION' && !session) {
+          } else if (event === 'SIGNED_OUT') {
+            this._iniciado = false;
             this._mostrarTelaAuth();
+          } else if (event === 'INITIAL_SESSION') {
+            if (!session) this._mostrarTelaAuth();
+          } else if (event === 'TOKEN_REFRESHED' && session) {
+            // Apenas atualiza o usuário, não recarrega tudo
+            this.user = session.user;
           }
         });
       },
@@ -7432,6 +7440,9 @@ ${tl.length?`<!-- Timeline -->
       },
 
       async _onLogin(user) {
+        // Evita recarregar se já está logado com o mesmo usuário
+        if (this._iniciado && this.user?.id === user.id) return;
+        this._iniciado = true;
         this.user = user;
         document.getElementById('usuarioEmail').textContent = user.email;
         document.getElementById('barraUsuario').classList.remove('hidden');
