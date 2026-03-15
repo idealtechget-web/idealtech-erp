@@ -7530,6 +7530,26 @@ ${tl.length?`<!-- Timeline -->
 
       uid() { return Auth.user?.id; },
 
+      // ── Helper: normaliza texto para maiúsculo antes de salvar ────────
+      _upper(obj) {
+        if (!obj || typeof obj !== 'object') return obj;
+        const skip = ['id','user_id','tipo','status','origem','cor','icone',
+                      'contaId','conta_id','categoriaId','categoria_id',
+                      'clienteId','cliente_id','recorrenteId','recorrente_id',
+                      'data','valor','preco_custo','preco_venda','total',
+                      'nf_numero','formaPagamento','forma_pagamento','logo',
+                      'campos','pecas','servicos','servicos_os','servicos_orc',
+                      'fotos','atualizacoes','fitid'];
+        const result = Array.isArray(obj) ? [] : {};
+        for (const [k,v] of Object.entries(obj)) {
+          if (skip.includes(k)) { result[k]=v; continue; }
+          if (typeof v === 'string') result[k]=v.toUpperCase();
+          else if (typeof v === 'object' && v !== null) result[k]=this._upper(v);
+          else result[k]=v;
+        }
+        return result;
+      },
+
       // ── Carregar tudo ao fazer login ──────────────────────────────────
       async carregarTudo() {
         const uid = this.uid(); if (!uid) return;
@@ -7539,7 +7559,7 @@ ${tl.length?`<!-- Timeline -->
           try {
             console.log(`[DB] buscando ${tabela}...`);
             const { data, error } = coluna === 'id'
-              ? await supa.from(tabela).select('*').eq('id', uid).single()
+              ? await supa.from(tabela).select('*').eq('id', uid).maybeSingle()
               : await supa.from(tabela).select('*').eq(coluna, uid);
             if (error) { console.warn(`[DB] ${tabela} erro:`, error.message); return null; }
             console.log(`[DB] ${tabela} ok — ${Array.isArray(data)?data.length:1} registro(s)`);
@@ -7658,7 +7678,8 @@ ${tl.length?`<!-- Timeline -->
       async salvarProduto(p) {
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarProduto: uid nulo!'); return null; }
-        const row = { user_id: uid, descricao: p.descricao, codigo: p.codigo||'',
+        const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
+        const row = { user_id: uid, descricao: u(p.descricao), codigo: u(p.codigo||''),
           categoria: p.categoria||'', preco_custo: p.preco_custo||0,
           preco_venda: p.preco_venda||0, quantidade_estoque: p.quantidade_estoque||0,
           estoque_minimo: p.estoque_minimo||0, ativo: p.ativo!==false };
@@ -7677,7 +7698,8 @@ ${tl.length?`<!-- Timeline -->
       async salvarServico(s) {
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarServico: uid nulo!'); return null; }
-        const row = { user_id: uid, nome: s.nome, descricao: s.descricao||'', valor: s.valor||0, ativo: s.ativo!==false };
+        const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
+        const row = { user_id: uid, nome: u(s.nome), descricao: u(s.descricao||''), valor: s.valor||0, ativo: s.ativo!==false };
         if (s.id && !s.id.startsWith('tmp_')) {
           const { data } = await supa.from('servicos').update(row).eq('id', s.id).eq('user_id', uid).select().single();
           return data;
@@ -7694,7 +7716,8 @@ ${tl.length?`<!-- Timeline -->
       async salvarCliente(c) {
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarCliente: uid nulo!'); return null; }
-        const row = { user_id: uid, nome: c.nome||'', tipo: c.tipo||'pf',
+        const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
+        const row = { user_id: uid, nome: u(c.nome||''), tipo: c.tipo||'pf',
           cpf_cnpj: c.cpf_cnpj||c.cpf||c.cnpj||'', razao_social: c.razao_social||'',
           telefone: c.telefone||'', email: c.email||'', endereco: c.endereco||'',
           cidade: c.cidade||'', cep: c.cep||'', obs: c.obs||'' };
@@ -7739,8 +7762,9 @@ ${tl.length?`<!-- Timeline -->
       async salvarReceita(r) {
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarReceita: uid nulo!'); return null; }
-        const row = { user_id: uid, cliente: r.cliente||'', cliente_id: r.clienteId||null,
-          descricao: r.descricao||'', valor: r.valor||0, data: r.data||null,
+        const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
+        const row = { user_id: uid, cliente: u(r.cliente||''), cliente_id: r.clienteId||null,
+          descricao: u(r.descricao||''), valor: r.valor||0, data: r.data||null,
           status: r.status||'pendente', forma_pagamento: r.formaPagamento||'Pix',
           conta_id: r.contaId||null, categoria_id: r.categoriaId||null,
           nf_emitida: r.nf_emitida||false, nf_tipo: r.nf_tipo||'NFe',
@@ -7761,7 +7785,8 @@ ${tl.length?`<!-- Timeline -->
       async salvarDespesa(g) {
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarDespesa: uid nulo!'); return null; }
-        const row = { user_id: uid, descricao: g.descricao||'', valor: g.valor||0,
+        const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
+        const row = { user_id: uid, descricao: u(g.descricao||''), valor: g.valor||0,
           data: g.data||null, status: g.status||'pendente',
           conta_id: g.contaId||null, categoria_id: g.categoriaId||null,
           nf_emitida: g.nf_emitida||false, nf_tipo: g.nf_tipo||'NFe',
@@ -7819,7 +7844,8 @@ ${tl.length?`<!-- Timeline -->
       async salvarOrcamento(o) {
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarOrcamento: uid nulo!'); return null; }
-        const row = { user_id: uid, numero: o.numero||'', cliente: o.cliente||'',
+        const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
+        const row = { user_id: uid, numero: u(o.numero||''), cliente: u(o.cliente||''),
           cliente_id: o.clienteId||null, tipo: o.tipo||'manutencao',
           status: o.status||'Pendente', data: o.data||null, validade: o.validade||null,
           total: o.total||0, forma_pagamento: o.formaPagamento||'',
