@@ -7148,7 +7148,8 @@ ${tl.length?`<!-- Timeline -->
         // Dados já carregados pelo DB.carregarTudo() antes do init()
         App.config.limiteMEI = App.state.configuracoes.limiteMEI || 81000;
 
-        document.getElementById('monthSelect').value = String(new Date().getMonth());
+        const ms = document.getElementById('monthSelect');
+        if (ms) ms.value = String(new Date().getMonth());
 
         this.renderizarTudo();
         App.financeiro.gerarRecorrentesAutomatico();
@@ -7227,13 +7228,17 @@ ${tl.length?`<!-- Timeline -->
         const anoAtual = new Date().getFullYear();
         const yearSel  = document.getElementById('yearSelect');
         if (yearSel) {
+          yearSel.innerHTML = ''; // limpa opções anteriores para evitar duplicatas
           for (let a = anoAtual; a >= anoAtual - 5; a--) {
             const opt = document.createElement('option');
             opt.value = a; opt.textContent = a;
             if (a === anoAtual) opt.selected = true;
             yearSel.appendChild(opt);
           }
-          yearSel.addEventListener('change', () => App.init && App.renderizarTudo ? App.renderizarTudo() : location.reload());
+          // Remover listener anterior antes de adicionar novo
+          const newYearSel = yearSel.cloneNode(true);
+          yearSel.parentNode.replaceChild(newYearSel, yearSel);
+          newYearSel.addEventListener('change', () => App.renderizarTudo());
         }
       }
     };
@@ -7448,7 +7453,11 @@ ${tl.length?`<!-- Timeline -->
         document.getElementById('barraUsuario').classList.remove('hidden');
         this._mostrarERP();
         this._loading('Carregando seus dados...');
-        await DB.carregarTudo();
+        try {
+          await DB.carregarTudo();
+        } catch(e) {
+          console.error('[Auth] Erro ao carregar dados:', e);
+        }
         this._loading(false);
         App.init();
       },
@@ -7506,23 +7515,22 @@ ${tl.length?`<!-- Timeline -->
       // ── Carregar tudo ao fazer login ──────────────────────────────────
       async carregarTudo() {
         const uid = this.uid(); if (!uid) return;
-        const [
-          { data: produtos },   { data: servicos },
-          { data: os },         { data: despesas },
-          { data: receitas },   { data: clientes },
-          { data: orcamentos }, { data: contas },
-          { data: categorias }, { data: perfil }
-        ] = await Promise.all([
-          supa.from('produtos').select('*').eq('user_id', uid),
-          supa.from('servicos').select('*').eq('user_id', uid),
-          supa.from('os').select('*').eq('user_id', uid),
-          supa.from('despesas').select('*').eq('user_id', uid),
-          supa.from('receitas').select('*').eq('user_id', uid),
-          supa.from('clientes').select('*').eq('user_id', uid),
-          supa.from('orcamentos').select('*').eq('user_id', uid),
-          supa.from('contas').select('*').eq('user_id', uid),
-          supa.from('categorias').select('*').eq('user_id', uid),
-          supa.from('perfis').select('*').eq('id', uid).single(),
+
+        // Busca segura — falha individual não quebra o resto
+        const q = async (tabela, coluna='user_id') => {
+          try {
+            const { data, error } = coluna === 'id'
+              ? await supa.from(tabela).select('*').eq('id', uid).single()
+              : await supa.from(tabela).select('*').eq(coluna, uid);
+            if (error) { console.warn(`[DB] ${tabela}:`, error.message); return null; }
+            return data;
+          } catch(e) { console.warn(`[DB] ${tabela} exception:`, e); return null; }
+        };
+
+        const [produtos, servicos, os, despesas, receitas,
+               clientes, orcamentos, contas, categorias, perfil] = await Promise.all([
+          q('produtos'), q('servicos'), q('os'), q('despesas'), q('receitas'),
+          q('clientes'), q('orcamentos'), q('contas'), q('categorias'), q('perfis','id'),
         ]);
 
         // Mapeia nomes do banco → nomes do App.state
@@ -7534,7 +7542,33 @@ ${tl.length?`<!-- Timeline -->
         App.state.clientes       = this._norm(clientes);
         App.state.orcamentos     = this._normOrc(orcamentos);
         App.state.contas         = this._normConta(contas);
-        App.state.categorias     = this._norm(categorias);
+        App.state.categorias     = this._norm(categorias).map(c => ({
+          ...c, tipo: (c.tipo||'').toLowerCase(), cor: (c.cor||'#64748b')
+        }));
+        // Se não vieram categorias do banco, cria as padrão
+        if (!App.state.categorias.length) {
+          const cats = [
+            {nome:'Serviços Prestados',tipo:'receita',icone:'⚙️',cor:'#10b981'},
+            {nome:'Venda de Produtos', tipo:'receita',icone:'📦',cor:'#3b82f6'},
+            {nome:'Consultoria',       tipo:'receita',icone:'💡',cor:'#8b5cf6'},
+            {nome:'Manutenção',        tipo:'receita',icone:'🔧',cor:'#06b6d4'},
+            {nome:'Outros (Receita)',  tipo:'receita',icone:'💰',cor:'#64748b'},
+            {nome:'Aluguel / Sede',    tipo:'despesa',icone:'🏠',cor:'#ef4444'},
+            {nome:'Material / Insumos',tipo:'despesa',icone:'🛒',cor:'#f97316'},
+            {nome:'Combustível/Transp',tipo:'despesa',icone:'⛽',cor:'#f59e0b'},
+            {nome:'Mão de Obra',       tipo:'despesa',icone:'👷',cor:'#ec4899'},
+            {nome:'Impostos / DAS',    tipo:'despesa',icone:'🏛️',cor:'#dc2626'},
+            {nome:'Internet/Telefone', tipo:'despesa',icone:'📡',cor:'#7c3aed'},
+            {nome:'Equipamentos / TI', tipo:'despesa',icone:'💻',cor:'#0891b2'},
+            {nome:'Marketing',         tipo:'despesa',icone:'📢',cor:'#0d9488'},
+            {nome:'Pró-Labore',        tipo:'despesa',icone:'👤',cor:'#1d4ed8'},
+            {nome:'Outros (Despesa)',  tipo:'despesa',icone:'💸',cor:'#475569'},
+          ];
+          for (const cat of cats) {
+            const saved = await this.salvarCategoria(cat);
+            if (saved) App.state.categorias.push({ ...saved, id: String(saved.id) });
+          }
+        }
         if (perfil) {
           App.state.configuracoes = {
             nome:       perfil.nome       || '',
@@ -7603,6 +7637,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarProduto(p) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarProduto: uid nulo!'); return null; }
         const row = { user_id: uid, descricao: p.descricao, codigo: p.codigo||'',
           categoria: p.categoria||'', preco_custo: p.preco_custo||0,
           preco_venda: p.preco_venda||0, quantidade_estoque: p.quantidade_estoque||0,
@@ -7621,6 +7656,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarServico(s) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarServico: uid nulo!'); return null; }
         const row = { user_id: uid, nome: s.nome, descricao: s.descricao||'', valor: s.valor||0, ativo: s.ativo!==false };
         if (s.id && !s.id.startsWith('tmp_')) {
           const { data } = await supa.from('servicos').update(row).eq('id', s.id).eq('user_id', uid).select().single();
@@ -7636,6 +7672,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarCliente(c) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarCliente: uid nulo!'); return null; }
         const row = { user_id: uid, nome: c.nome||'', tipo: c.tipo||'pf',
           cpf_cnpj: c.cpf_cnpj||c.cpf||c.cnpj||'', razao_social: c.razao_social||'',
           telefone: c.telefone||'', email: c.email||'', endereco: c.endereco||'',
@@ -7654,6 +7691,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarOS(os) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarOS: uid nulo!'); return null; }
         const row = { user_id: uid, numero: os.numero||'', cliente: os.cliente||'',
           cliente_id: os.clienteId||null, tipo: os.tipo||'manutencao',
           status: os.status||'Aberta', data: os.data||null, previsao: os.previsao||null,
@@ -7677,6 +7715,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarReceita(r) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarReceita: uid nulo!'); return null; }
         const row = { user_id: uid, cliente: r.cliente||'', cliente_id: r.clienteId||null,
           descricao: r.descricao||'', valor: r.valor||0, data: r.data||null,
           status: r.status||'pendente', forma_pagamento: r.formaPagamento||'Pix',
@@ -7697,6 +7736,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarDespesa(g) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarDespesa: uid nulo!'); return null; }
         const row = { user_id: uid, descricao: g.descricao||'', valor: g.valor||0,
           data: g.data||null, status: g.status||'pendente',
           conta_id: g.contaId||null, categoria_id: g.categoriaId||null,
@@ -7718,6 +7758,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarConta(c) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarConta: uid nulo!'); return null; }
         const row = { user_id: uid, nome: c.nome||'', banco: c.banco||'',
           tipo: c.tipo||'corrente', cor: c.cor||'#3b82f6', saldo_inicial: c.saldoInicial||0 };
         if (c.id && !c.id.startsWith('tmp_')) {
@@ -7734,6 +7775,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarCategoria(cat) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarCategoria: uid nulo!'); return null; }
         const row = { user_id: uid, nome: cat.nome, tipo: cat.tipo, icone: cat.icone||'🏷️', cor: cat.cor||'#64748b' };
         if (cat.id && !cat.id.startsWith('tmp_')) {
           const { data } = await supa.from('categorias').update(row).eq('id', cat.id).eq('user_id', uid).select().single();
@@ -7749,6 +7791,7 @@ ${tl.length?`<!-- Timeline -->
 
       async salvarOrcamento(o) {
         const uid = this.uid();
+        if (!uid) { console.error('[DB] salvarOrcamento: uid nulo!'); return null; }
         const row = { user_id: uid, numero: o.numero||'', cliente: o.cliente||'',
           cliente_id: o.clienteId||null, tipo: o.tipo||'manutencao',
           status: o.status||'Pendente', data: o.data||null, validade: o.validade||null,
