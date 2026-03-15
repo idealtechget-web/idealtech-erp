@@ -7368,6 +7368,7 @@ ${tl.length?`<!-- Timeline -->
       user: null,
 
       _iniciado: false,
+      _carregando: false,
 
       async init() {
         // Mostra tela de login imediatamente enquanto verifica sessão
@@ -7432,6 +7433,8 @@ ${tl.length?`<!-- Timeline -->
         if (!confirm('Deseja sair do sistema?')) return;
         await supa.auth.signOut();
         this.user = null;
+        this._iniciado = false;
+        this._carregando = false;
         this._mostrarTelaAuth();
         // Limpar estado
         App.state.produtos = []; App.state.servicos = []; App.state.osLista = [];
@@ -7446,7 +7449,9 @@ ${tl.length?`<!-- Timeline -->
 
       async _onLogin(user) {
         // Evita recarregar se já está logado com o mesmo usuário
+        if (this._carregando) return; // evita chamadas simultâneas
         if (this._iniciado && this.user?.id === user.id) return;
+        this._carregando = true;
         this._iniciado = true;
         this.user = user;
         document.getElementById('usuarioEmail').textContent = user.email;
@@ -7457,6 +7462,8 @@ ${tl.length?`<!-- Timeline -->
           await DB.carregarTudo();
         } catch(e) {
           console.error('[Auth] Erro ao carregar dados:', e);
+        } finally {
+          this._carregando = false;
         }
         this._loading(false);
         App.init();
@@ -7662,7 +7669,8 @@ ${tl.length?`<!-- Timeline -->
           const { data } = await supa.from('servicos').update(row).eq('id', s.id).eq('user_id', uid).select().single();
           return data;
         }
-        const { data } = await supa.from('servicos').insert(row).select().single();
+        const { data, error } = await supa.from('servicos').insert(row).select().single();
+        if (error) { console.error('[DB] salvarServico insert:', error); App.ui.mostrarToast('Erro ao salvar: '+error.message,'erro'); return null; }
         return data;
       },
 
@@ -7681,7 +7689,8 @@ ${tl.length?`<!-- Timeline -->
           const { data } = await supa.from('clientes').update(row).eq('id', c.id).eq('user_id', uid).select().single();
           return data;
         }
-        const { data } = await supa.from('clientes').insert(row).select().single();
+        const { data, error } = await supa.from('clientes').insert(row).select().single();
+        if (error) { console.error('[DB] salvarCliente insert:', error); App.ui.mostrarToast('Erro ao salvar: '+error.message,'erro'); return null; }
         return data;
       },
 
@@ -7705,7 +7714,8 @@ ${tl.length?`<!-- Timeline -->
           const { data } = await supa.from('os').update(row).eq('id', os.id).eq('user_id', uid).select().single();
           return data;
         }
-        const { data } = await supa.from('os').insert(row).select().single();
+        const { data, error } = await supa.from('os').insert(row).select().single();
+        if (error) { console.error('[DB] salvarOS insert:', error); App.ui.mostrarToast('Erro ao salvar: '+error.message,'erro'); return null; }
         return data;
       },
 
@@ -7726,7 +7736,8 @@ ${tl.length?`<!-- Timeline -->
           const { data } = await supa.from('receitas').update(row).eq('id', r.id).eq('user_id', uid).select().single();
           return data;
         }
-        const { data } = await supa.from('receitas').insert(row).select().single();
+        const { data, error } = await supa.from('receitas').insert(row).select().single();
+        if (error) { console.error('[DB] salvarReceita insert:', error); App.ui.mostrarToast('Erro ao salvar: '+error.message,'erro'); return null; }
         return data;
       },
 
@@ -7748,7 +7759,8 @@ ${tl.length?`<!-- Timeline -->
           const { data } = await supa.from('despesas').update(row).eq('id', g.id).eq('user_id', uid).select().single();
           return data;
         }
-        const { data } = await supa.from('despesas').insert(row).select().single();
+        const { data, error } = await supa.from('despesas').insert(row).select().single();
+        if (error) { console.error('[DB] salvarDespesa insert:', error); App.ui.mostrarToast('Erro ao salvar: '+error.message,'erro'); return null; }
         return data;
       },
 
@@ -7765,7 +7777,8 @@ ${tl.length?`<!-- Timeline -->
           const { data } = await supa.from('contas').update(row).eq('id', c.id).eq('user_id', uid).select().single();
           return data;
         }
-        const { data } = await supa.from('contas').insert(row).select().single();
+        const { data, error } = await supa.from('contas').insert(row).select().single();
+        if (error) { console.error('[DB] salvarConta insert:', error); App.ui.mostrarToast('Erro ao salvar: '+error.message,'erro'); return null; }
         return data;
       },
 
@@ -7781,7 +7794,8 @@ ${tl.length?`<!-- Timeline -->
           const { data } = await supa.from('categorias').update(row).eq('id', cat.id).eq('user_id', uid).select().single();
           return data;
         }
-        const { data } = await supa.from('categorias').insert(row).select().single();
+        const { data, error } = await supa.from('categorias').insert(row).select().single();
+        if (error) { console.error('[DB] salvarCategoria insert:', error); App.ui.mostrarToast('Erro ao salvar: '+error.message,'erro'); return null; }
         return data;
       },
 
@@ -7799,10 +7813,12 @@ ${tl.length?`<!-- Timeline -->
           conta_id: o.contaId||null, campos: o.campos||{},
           pecas: o.pecas||[], servicos_orc: o.servicos||[], obs: o.obs||'' };
         if (o.id && !o.id.startsWith('tmp_')) {
-          const { data } = await supa.from('orcamentos').update(row).eq('id', o.id).eq('user_id', uid).select().single();
+          const { data, error } = await supa.from('orcamentos').update(row).eq('id', o.id).eq('user_id', uid).select().single();
+          if (error) { console.error('[DB] salvarOrcamento update:', error); App.ui.mostrarToast('Erro ao salvar orçamento: '+error.message,'erro'); return null; }
           return data;
         }
-        const { data } = await supa.from('orcamentos').insert(row).select().single();
+        const { data, error } = await supa.from('orcamentos').insert(row).select().single();
+        if (error) { console.error('[DB] salvarOrcamento insert:', error); App.ui.mostrarToast('Erro ao salvar orçamento: '+error.message,'erro'); return null; }
         return data;
       },
 
