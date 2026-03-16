@@ -2837,21 +2837,20 @@
           reader.onload = async (e) => {
             try {
               const parser = new DOMParser();
-              const xml = parser.parseFromString(e.target.result, 'application/xml');
+              // Remove namespace para facilitar a busca de tags
+              const xmlStr = e.target.result.replace(/ xmlns[^"]*"[^"]*"/g, '').replace(/ xmlns[^']*'[^']*'/g, '');
+              const xml = parser.parseFromString(xmlStr, 'application/xml');
               if (xml.querySelector('parsererror')) { App.ui.mostrarToast('XML inválido.','erro'); return; }
 
-              // Helper namespace-agnostic
+              // Helper simples (sem namespace)
               const tag = (scope, nome) => {
-                const el = scope.getElementsByTagName(nome)[0] ||
-                           scope.getElementsByTagNameNS('*', nome)[0];
+                const el = scope.querySelector(nome) || scope.getElementsByTagName(nome)[0];
                 return el ? el.textContent.trim() : '';
               };
 
               // ── Detecta tipo: NF-e (det) ou NFS-e (infNFSe) ──────────────
-              const isNFSe = xml.getElementsByTagName('infNFSe').length > 0 ||
-                             xml.getElementsByTagNameNS('*','infNFSe').length > 0;
-              const isNFe  = xml.getElementsByTagName('det').length > 0 ||
-                             xml.getElementsByTagNameNS('*','det').length > 0;
+              const isNFSe = !!xml.querySelector('infNFSe');
+              const isNFe  = !!xml.querySelector('det');
 
               if (isNFSe) {
                 // ── NFS-e: importa como receita ───────────────────────────
@@ -2948,7 +2947,9 @@ Importar como Receita no Financeiro?`)) return;
           reader.onload = (e) => {
             try {
               const parser = new DOMParser();
-              const xml    = parser.parseFromString(e.target.result, 'application/xml');
+              // Remove namespace para facilitar busca de tags
+              const xmlStr = e.target.result.replace(/ xmlns[^"]*"[^"]*"/g, '').replace(/ xmlns[^']*'[^']*'/g, '');
+              const xml    = parser.parseFromString(xmlStr, 'application/xml');
 
               // Verifica erro de parse
               if (xml.querySelector('parsererror')) {
@@ -2956,19 +2957,14 @@ Importar como Receita no Financeiro?`)) return;
                 return;
               }
 
-              // Helper: pega texto de uma tag (busca namespace-agnostic)
+              // Helper simples (sem namespace)
               const tag = (nome) => {
-                const el = xml.querySelector(nome) ||
-                           xml.getElementsByTagNameNS('*', nome)[0];
+                const el = xml.querySelector(nome) || xml.getElementsByTagName(nome)[0];
                 return el ? el.textContent.trim() : '';
               };
 
-              // Pode haver múltiplos <det> (itens). Pega o primeiro se não houver id
-              // e exibe lista para escolher se houver mais de um.
-              // Busca namespace-agnostic
-              const itens = xml.getElementsByTagName('det').length
-                ? Array.from(xml.getElementsByTagName('det'))
-                : Array.from(xml.getElementsByTagNameNS('*','det'));
+              // Busca itens
+              const itens = Array.from(xml.querySelectorAll('det'));
               if (!itens || itens.length === 0) {
                 App.ui.mostrarToast('Nenhum item (det) encontrado no XML.', 'erro');
                 return;
@@ -2992,18 +2988,15 @@ Importar como Receita no Financeiro?`)) return;
 
         _preencherCamposPorXmlItem(det, xml, nomeArquivo) {
           const tag = (scope, nome) => {
-            const el = (scope.getElementsByTagName ? scope.getElementsByTagName(nome)[0] : null) ||
-                       (scope.getElementsByTagNameNS ? scope.getElementsByTagNameNS('*', nome)[0] : null);
+            const el = scope.querySelector(nome) || scope.getElementsByTagName(nome)[0];
             return el ? el.textContent.trim() : '';
           };
           const tagGlobal = (nome) => {
-            const el = xml.getElementsByTagName(nome)[0] ||
-                       xml.getElementsByTagNameNS('*', nome)[0];
+            const el = xml.querySelector(nome) || xml.getElementsByTagName(nome)[0];
             return el ? el.textContent.trim() : '';
           };
 
-          const prod = det.getElementsByTagName('prod')[0] ||
-                       det.getElementsByTagNameNS('*','prod')[0] || det;
+          const prod = det.querySelector('prod') || det;
 
           // Campos do produto na NF-e
           const xProd  = tag(prod, 'xProd')  || '';   // Descrição
