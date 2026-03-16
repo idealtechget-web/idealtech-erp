@@ -2337,27 +2337,92 @@
                 supa.from('categorias').delete().eq('user_id', uid),
               ]);
 
-              // Importa cada entidade para o Supabase
-              const salvar = async (itens, fn) => {
-                if (!itens || !itens.length) return;
-                for (const item of itens) {
-                  // Remove o id antigo para deixar o Supabase gerar um novo UUID
-                  const { id, ...semId } = item;
-                  await fn({ ...semId });
-                }
-              };
+              // Mapas de IDs antigos → novos (para manter vínculos)
+              const mapaContas = {};
+              const mapaCategorias = {};
+              const mapaClientes = {};
 
-              await salvar(bk.clientes,     (c) => DB.salvarCliente(c));
-              await salvar(bk.contas,        (c) => DB.salvarConta({ ...c, saldoInicial: c.saldoInicial||c.saldo_inicial||0 }));
-              await salvar(bk.categorias,    (c) => DB.salvarCategoria(c));
-              await salvar(bk.produtos,      (p) => DB.salvarProduto(p));
-              await salvar(bk.servicos,      (s) => DB.salvarServico(s));
-              await salvar(bk.osLista,       (o) => DB.salvarOS({ ...o, formaPagamento: o.formaPagamento||o.forma_pagamento||'' }));
-              await salvar(bk.orcamentos,    (o) => DB.salvarOrcamento(o));
-              await salvar(bk.recebimentos,  (r) => DB.salvarReceita({ ...r, formaPagamento: r.formaPagamento||r.forma_pagamento||'Pix' }));
-              await salvar(bk.gastos,        (g) => DB.salvarDespesa(g));
+              // 1. Importa clientes (sem dependências)
+              for (const c of (bk.clientes||[])) {
+                const idAntigo = String(c.id||'');
+                const { id, ...dados } = c;
+                const saved = await DB.salvarCliente(dados);
+                if (saved) mapaClientes[idAntigo] = String(saved.id);
+              }
 
-              // Salva configurações/perfil
+              // 2. Importa contas (sem dependências)
+              for (const c of (bk.contas||[])) {
+                const idAntigo = String(c.id||'');
+                const { id, ...dados } = c;
+                const saved = await DB.salvarConta({ ...dados, saldoInicial: dados.saldoInicial||dados.saldo_inicial||0 });
+                if (saved) mapaContas[idAntigo] = String(saved.id);
+              }
+
+              // 3. Importa categorias (sem dependências)
+              for (const c of (bk.categorias||[])) {
+                const idAntigo = String(c.id||'');
+                const { id, ...dados } = c;
+                const saved = await DB.salvarCategoria(dados);
+                if (saved) mapaCategorias[idAntigo] = String(saved.id);
+              }
+
+              // Helper: traduz IDs antigos para novos
+              const traduzId = (mapaId, idAntigo) => idAntigo ? (mapaId[String(idAntigo)] || null) : null;
+
+              // 4. Importa produtos e serviços (sem dependências)
+              for (const p of (bk.produtos||[])) {
+                const { id, ...dados } = p;
+                await DB.salvarProduto(dados);
+              }
+              for (const s of (bk.servicos||[])) {
+                const { id, ...dados } = s;
+                await DB.salvarServico(dados);
+              }
+
+              // 5. Importa OS (referencia contaId e clienteId)
+              for (const o of (bk.osLista||[])) {
+                const { id, ...dados } = o;
+                await DB.salvarOS({
+                  ...dados,
+                  contaId:    traduzId(mapaContas,   dados.contaId||dados.conta_id),
+                  clienteId:  traduzId(mapaClientes, dados.clienteId||dados.cliente_id),
+                  formaPagamento: dados.formaPagamento||dados.forma_pagamento||'',
+                });
+              }
+
+              // 6. Importa orçamentos (referencia clienteId)
+              for (const o of (bk.orcamentos||[])) {
+                const { id, ...dados } = o;
+                await DB.salvarOrcamento({
+                  ...dados,
+                  contaId:   traduzId(mapaContas,   dados.contaId||dados.conta_id),
+                  clienteId: traduzId(mapaClientes, dados.clienteId||dados.cliente_id),
+                });
+              }
+
+              // 7. Importa receitas (referencia contaId e categoriaId)
+              for (const r of (bk.recebimentos||[])) {
+                const { id, ...dados } = r;
+                await DB.salvarReceita({
+                  ...dados,
+                  contaId:      traduzId(mapaContas,      dados.contaId||dados.conta_id),
+                  categoriaId:  traduzId(mapaCategorias,  dados.categoriaId||dados.categoria_id),
+                  clienteId:    traduzId(mapaClientes,    dados.clienteId||dados.cliente_id),
+                  formaPagamento: dados.formaPagamento||dados.forma_pagamento||'Pix',
+                });
+              }
+
+              // 8. Importa despesas (referencia contaId e categoriaId)
+              for (const g of (bk.gastos||[])) {
+                const { id, ...dados } = g;
+                await DB.salvarDespesa({
+                  ...dados,
+                  contaId:     traduzId(mapaContas,     dados.contaId||dados.conta_id),
+                  categoriaId: traduzId(mapaCategorias, dados.categoriaId||dados.categoria_id),
+                });
+              }
+
+              // 9. Salva configurações/perfil
               if (bk.configuracoes) {
                 await DB.salvarPerfil(bk.configuracoes);
               }
