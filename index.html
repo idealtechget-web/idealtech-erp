@@ -1118,6 +1118,25 @@
           </select>
         </div>
 
+        <!-- Dados Fiscais NFS-e (opcionais) -->
+        <div class="bg-slate-900/50 rounded-lg border border-slate-700/50 p-3">
+          <h4 class="text-slate-400 text-xs font-bold uppercase mb-2 flex items-center gap-2">
+            🧾 Dados Fiscais NFS-e <span class="text-slate-600 font-normal normal-case">(opcional — para relação fiscal)</span>
+          </h4>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-slate-500 text-xs mb-1 block">cTribNac</label>
+              <input type="text" id="osCTribNac" placeholder="Ex: 170601" maxlength="10"
+                class="w-full px-3 py-2 rounded bg-slate-800 text-white border border-slate-600 text-sm outline-none">
+            </div>
+            <div>
+              <label class="text-slate-500 text-xs mb-1 block">cNBS</label>
+              <input type="text" id="osCNbs" placeholder="Ex: 114063400" maxlength="15"
+                class="w-full px-3 py-2 rounded bg-slate-800 text-white border border-slate-600 text-sm outline-none">
+            </div>
+          </div>
+        </div>
+
         <!-- Fotos da OS -->
         <div class="bg-slate-900/60 rounded-xl border border-yellow-800/40 p-4 space-y-3">
           <h4 class="text-yellow-400 text-xs font-bold uppercase tracking-wider">📸 Fotos da OS</h4>
@@ -2908,26 +2927,53 @@ Importar como Receita no Financeiro?`)) return;
                   const cEAN  = cEANr !== 'SEM GTIN' ? cEANr : '';
                   const uCom  = tag(prod,'uCom').toUpperCase() || 'UN';
                   const vUnCom= parseFloat(tag(prod,'vUnCom')||'0');
+                  const qCom  = parseFloat(tag(prod,'qCom')||'0'); // quantidade da nota
                   const origEl= det.getElementsByTagName('orig')[0] || det.getElementsByTagNameNS('*','orig')[0];
                   const orig  = origEl ? origEl.textContent.trim().charAt(0) : '0';
 
                   if (!xProd || !NCM) continue;
 
-                  const jaExiste = App.state.produtos.some(p =>
+                  // Se já existe, apenas soma a quantidade ao estoque
+                  const jaExiste = App.state.produtos.find(p =>
                     (cEAN && (p.codigo_barras||p.ean||'') === cEAN) ||
                     ((p.descricao||'').toUpperCase() === xProd && (p.ncm||'') === NCM)
                   );
-                  if (jaExiste) { duplicados++; continue; }
+                  if (jaExiste) {
+                    jaExiste.quantidade_estoque = (jaExiste.quantidade_estoque||0) + qCom;
+                    await DB.salvarProduto(jaExiste);
+                    duplicados++;
+                    continue;
+                  }
 
                   const novoProd = { descricao:xProd, ncm:NCM, cfop:CFOP,
                     codigo_barras:cEAN, ean:cEAN, unidade:uCom,
-                    preco_venda:vUnCom, preco_custo:0, quantidade_estoque:0,
+                    preco_venda:vUnCom, preco_custo:0, quantidade_estoque:qCom,
                     origem:orig, ativo:true };
                   const saved = await DB.salvarProduto(novoProd);
                   if (saved) { App.state.produtos.push({ ...novoProd, id: String(saved.id) }); importados++; }
                 }
                 this.renderizar();
-                App.ui.mostrarToast(`✅ ${importados} produto(s) importado(s).${duplicados>0?' '+duplicados+' duplicado(s) ignorado(s).':''}`, 'sucesso');
+                App.ui.mostrarToast(`✅ ${importados} produto(s) novo(s) importado(s)${duplicados>0?'. '+duplicados+' já existente(s) com estoque atualizado':''}!`, 'sucesso');
+
+                // Oferecer lançar a NF-e como despesa
+                const vNF  = parseFloat(tag(xml,'vNF')||'0');
+                const nNF  = tag(xml,'nNF');
+                const dhEmi= (tag(xml,'dhEmi')||'').slice(0,10) || new Date().toISOString().slice(0,10);
+                const emitEl = xml.querySelector('emit');
+                const fornecedor = emitEl ? (tag(emitEl,'xNome')||tag(emitEl,'xFant')||'Fornecedor') : 'Fornecedor';
+                if (vNF > 0 && confirm(`Lançar esta NF-e como Despesa no Financeiro?\n\nFornecedor: ${fornecedor}\nNF nº ${nNF} — R$ ${vNF.toFixed(2)}`)) {
+                  const despesa = {
+                    descricao: `NF-e #${nNF} — ${fornecedor.slice(0,60)}`.toUpperCase(),
+                    valor:     vNF, data: dhEmi, status: 'pago',
+                    nf_emitida: true, nf_tipo: 'NFe', nf_numero: nNF,
+                  };
+                  const savedDesp = await DB.salvarDespesa(despesa);
+                  if (savedDesp) {
+                    App.state.gastos.push({ ...despesa, id: String(savedDesp.id) });
+                    App.financeiro.renderizar();
+                    App.ui.mostrarToast(`💸 Despesa R$ ${vNF.toFixed(2)} lançada!`, 'sucesso');
+                  }
+                }
 
               } else {
                 App.ui.mostrarToast('XML não reconhecido. Envie uma NF-e ou NFS-e válida.','erro');
@@ -3019,6 +3065,9 @@ Importar como Receita no Financeiro?`)) return;
           })();
 
           // Preenche os campos do form — mantendo valores já digitados se existirem
+          // Quantidade da nota
+          const qCom = parseFloat(tag(prod,'qCom')||'0');
+
           const set = (id, val) => {
             const el = document.getElementById(id);
             if (el && val) {
@@ -3045,6 +3094,14 @@ Importar como Receita no Financeiro?`)) return;
           // Origem
           const origEl = document.getElementById('prodOrigem');
           if (origEl && orig !== '') origEl.value = orig.charAt(0);
+
+          // Quantidade da nota → estoque inicial
+          const estoqueEl = document.getElementById('prodEstoque');
+          if (estoqueEl && qCom > 0) {
+            estoqueEl.value = qCom;
+            estoqueEl.classList.add('campo-preenchido-automatico');
+            setTimeout(() => estoqueEl.classList.remove('campo-preenchido-automatico'), 2500);
+          }
 
           // Badge de confirmação abaixo do botão
           const preview = document.getElementById('prodXmlPreview');
@@ -4998,6 +5055,8 @@ ${osRows ? `
             document.getElementById('tituloModalOS').innerText      = 'Editar OS';
             document.getElementById('osIdHidden').value             = os.id;
             document.getElementById('osNumero').value               = os.numero || os.id;
+            document.getElementById('osCTribNac').value             = os.cTribNac || '';
+            document.getElementById('osCNbs').value                 = os.cNbs || '';
             if (os.clienteId) selCliente.value                      = os.clienteId;
             document.getElementById('osClienteNovo').value         = os.cliente || '';
             document.getElementById('osAparelho').value             = os.aparelho || '';
@@ -5048,9 +5107,102 @@ ${osRows ? `
           document.getElementById('modalOS').classList.add('hidden');
           document.getElementById('osPrevisao').value        = '';
           document.getElementById('osNovaAtualizacao').value = '';
+          document.getElementById('osCTribNac').value        = '';
+          document.getElementById('osCNbs').value            = '';
           App.os._renderHistoricoAtualizacoes([]);
           App.os._limparFotos();
         },
+        exportarFiscal(id) {
+          const os  = App.state.osLista.find(x => String(x.id) === String(id));
+          const cfg = App.state.configuracoes;
+          if (!os) return;
+          const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const fmt = v => Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+          const hoje = new Date().toLocaleDateString('pt-BR');
+
+          const itens = [
+            ...(os.pecas||[]).map(p => {
+              const prod = App.state.produtos.find(x => String(x.id) === String(p.id));
+              const ncm  = prod?.ncm  || p.ncm  || '—';
+              const cfop = prod?.cfop || p.cfop || '—';
+              const orig = prod?.origem || p.origem || '—';
+              return `<tr>
+                <td>${esc(p.descricao||p.nome||'')}</td>
+                <td style="text-align:center">${p.qtd||1}</td>
+                <td style="text-align:center">${esc(p.unidade||prod?.unidade||'UN')}</td>
+                <td style="text-align:center">${ncm}</td>
+                <td style="text-align:center">${cfop}</td>
+                <td style="text-align:center">${orig}</td>
+                <td style="text-align:right">R$ ${fmt(p.preco)}</td>
+                <td style="text-align:right">R$ ${fmt((p.preco||0)*(p.qtd||1))}</td>
+              </tr>`;
+            }),
+            ...(os.servicos||[]).map(s => `<tr>
+              <td>${esc(s.descricao||s.nome||'')} <span style="color:#888;font-size:11px">(Serviço)</span></td>
+              <td style="text-align:center">1</td><td style="text-align:center">SV</td>
+              <td style="text-align:center">—</td><td style="text-align:center">—</td><td style="text-align:center">—</td>
+              <td style="text-align:right">R$ ${fmt(s.preco)}</td>
+              <td style="text-align:right">R$ ${fmt(s.preco)}</td>
+            </tr>`),
+          ].join('') || '<tr><td colspan="8" style="text-align:center;color:#888">Nenhum item</td></tr>';
+
+          const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+          <title>Relação Fiscal — OS #${esc(os.numero)}</title>
+          <style>
+            body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;color:#111}
+            h1{font-size:20px;margin-bottom:4px} h2{font-size:14px;color:#555;font-weight:normal;margin:0 0 20px}
+            .info{background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+            .info p{margin:4px 0;font-size:13px} .info strong{color:#333}
+            table{width:100%;border-collapse:collapse;margin-bottom:20px}
+            th{background:#1e3a5f;color:white;padding:10px;text-align:left;font-size:13px}
+            td{padding:9px 10px;border-bottom:1px solid #eee;font-size:13px}
+            tr:nth-child(even){background:#f9f9f9}
+            .total{text-align:right;font-size:16px;font-weight:bold;padding:10px;background:#f0f7ff;border-radius:6px}
+            .obs{background:#fffbea;border:1px solid #f0d060;border-radius:6px;padding:12px;font-size:12px;color:#555}
+            .footer{text-align:center;font-size:11px;color:#999;margin-top:30px;border-top:1px solid #eee;padding-top:12px}
+            @media print{button{display:none}}
+          </style></head><body>
+          <button onclick="window.print()" style="float:right;background:#1e3a5f;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
+          <h1>📋 Relação Fiscal — Ordem de Serviço</h1>
+          <h2>Gerado em ${hoje} — Para emissão de nota fiscal</h2>
+          <div class="info">
+            <p><strong>Empresa:</strong> ${esc(cfg.nome||'')}</p>
+            <p><strong>CNPJ:</strong> ${esc(cfg.cnpj||'')}</p>
+            <p><strong>Telefone:</strong> ${esc(cfg.telefone||'')}</p>
+            <p><strong>Endereço:</strong> ${esc(cfg.endereco||'')}</p>
+          </div>
+          <div class="info">
+            <p><strong>OS Nº:</strong> ${esc(os.numero)}</p>
+            <p><strong>Data:</strong> ${os.data ? new Date(os.data+'T12:00:00').toLocaleDateString('pt-BR') : hoje}</p>
+            <p><strong>Cliente:</strong> ${esc(os.cliente)}</p>
+            <p><strong>Status:</strong> ${esc(os.status)}</p>
+            ${os.clienteTelefone ? `<p><strong>Tel. Cliente:</strong> ${esc(os.clienteTelefone)}</p>` : ''}
+            ${os.clienteDocumento ? `<p><strong>Doc. Cliente:</strong> ${esc(os.clienteDocumento)}</p>` : ''}
+          </div>
+          <table>
+            <thead><tr><th>Descrição</th><th style="text-align:center">Qtd</th><th style="text-align:center">Un</th><th style="text-align:center">NCM</th><th style="text-align:center">CFOP</th><th style="text-align:center">Origem</th><th style="text-align:right">Vlr Unit.</th><th style="text-align:right">Total</th></tr></thead>
+            <tbody>${itens}</tbody>
+          </table>
+          <div class="total">Total: R$ ${fmt(os.total)}</div>
+          <br>
+          <div class="obs">
+            <strong>Forma de Pagamento:</strong> ${esc(os.formaPagamento||'—')}<br>
+            ${os.defeito ? `<strong>Serviço Executado:</strong> ${esc(os.defeito)}<br>` : ''}
+            ${os.laudo ? `<strong>Laudo:</strong> ${esc(os.laudo)}<br>` : ''}
+            ${os.cTribNac ? `<strong>cTribNac:</strong> ${esc(os.cTribNac)}<br>` : ''}
+            ${os.cNbs ? `<strong>cNBS:</strong> ${esc(os.cNbs)}<br>` : ''}
+          </div>
+          <div class="footer">Documento auxiliar para emissão de NF-e/NFS-e — Gerado por IDEAL ERP MEI PRO</div>
+          </body></html>`;
+
+          const blob = new Blob([html], {type:'text/html'});
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href = url; a.download = `fiscal_OS_${os.numero}_${os.cliente.replace(/[^a-zA-Z0-9]/g,'_').slice(0,20)}.html`;
+          a.click(); URL.revokeObjectURL(url);
+          App.ui.mostrarToast('Relação fiscal exportada!','sucesso');
+        },
+
         abrirModalPrint(id){ document.getElementById('printOsId').value = id; document.getElementById('modalPrintOS').classList.remove('hidden'); },
         fecharModalPrint() { document.getElementById('modalPrintOS').classList.add('hidden'); },
 
@@ -5684,6 +5836,8 @@ ${osRows ? `
             });
           }
 
+          os.cTribNac = g('osCTribNac');
+          os.cNbs     = g('osCNbs');
           os.status = idH ? (App.state.osLista.find(x=>String(x.id)===String(idH))?.status||'Aberta') : 'Aberta';
           os.id = idH || null;  // ESSENCIAL: passa o id para o DB.salvarOS fazer UPDATE
           App.ui.mostrarLoading();
@@ -6496,6 +6650,7 @@ ${tl.length?`<!-- Timeline -->
                     ${os.laudoRelatorio ? `<button onclick="App.os.exportarLaudoHTML('${os.id}')" class="text-pink-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Exportar Laudo HTML (mobile)">📤</button>` : ''}
                     <button onclick="App.os.gerarLinkCliente('${os.id}')" class="text-cyan-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Link Cliente">📱</button>
                     <button onclick="App.os.abrirModalPrint('${os.id}')" class="text-green-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Imprimir">🖨️</button>
+                    <button onclick="App.os.exportarFiscal('${os.id}')" class="text-yellow-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Exportar Relação Fiscal">🧾</button>
                     <button onclick="App.os.abrirModal('${os.id}')"      class="text-blue-400  bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition">✏️</button>
                     <button onclick="App.os.confirmarExclusao('${os.id}')" class="text-red-500 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition">🗑️</button>
                   </div>
@@ -6685,6 +6840,75 @@ ${tl.length?`<!-- Timeline -->
           setTimeout(() => window.print(), 150);
         },
 
+        exportarFiscalVenda(venda) {
+          const cfg = App.state.configuracoes;
+          const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const fmt = v => Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+          const hoje = new Date().toLocaleDateString('pt-BR');
+          const itens = (venda.itens||[]).map(i => {
+            // Busca dados fiscais do produto no estoque
+            const prod = App.state.produtos.find(p => String(p.id) === String(i.id));
+            const ncm   = prod?.ncm   || '—';
+            const cfop  = prod?.cfop  || '—';
+            const orig  = prod?.origem|| '—';
+            return `<tr>
+              <td>${esc(i.desc||i.descricao||'')}</td>
+              <td style="text-align:center">${i.qtd||1}</td>
+              <td style="text-align:center">${esc(i.unidade||prod?.unidade||'UN')}</td>
+              <td style="text-align:center">${ncm}</td>
+              <td style="text-align:center">${cfop}</td>
+              <td style="text-align:center">${orig}</td>
+              <td style="text-align:right">R$ ${fmt(i.preco)}</td>
+              <td style="text-align:right">R$ ${fmt((i.preco||0)*(i.qtd||1))}</td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="8" style="text-align:center;color:#888">Nenhum item</td></tr>';
+
+          const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+          <title>Relação Fiscal — ${esc(venda.descricao)}</title>
+          <style>
+            body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;color:#111}
+            h1{font-size:20px;margin-bottom:4px} h2{font-size:14px;color:#555;font-weight:normal;margin:0 0 20px}
+            .info{background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+            .info p{margin:4px 0;font-size:13px} .info strong{color:#333}
+            table{width:100%;border-collapse:collapse;margin-bottom:20px}
+            th{background:#1e3a5f;color:white;padding:10px;text-align:left;font-size:13px}
+            td{padding:9px 10px;border-bottom:1px solid #eee;font-size:13px}
+            tr:nth-child(even){background:#f9f9f9}
+            .total{text-align:right;font-size:16px;font-weight:bold;padding:10px;background:#f0f7ff;border-radius:6px}
+            .footer{text-align:center;font-size:11px;color:#999;margin-top:30px;border-top:1px solid #eee;padding-top:12px}
+            @media print{button{display:none}}
+          </style></head><body>
+          <button onclick="window.print()" style="float:right;background:#1e3a5f;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
+          <h1>📋 Relação Fiscal — Venda de Produtos</h1>
+          <h2>Gerado em ${hoje} — Para emissão de NF-e</h2>
+          <div class="info">
+            <p><strong>Empresa:</strong> ${esc(cfg.nome||'')}</p>
+            <p><strong>CNPJ:</strong> ${esc(cfg.cnpj||'')}</p>
+            <p><strong>Telefone:</strong> ${esc(cfg.telefone||'')}</p>
+            <p><strong>Endereço:</strong> ${esc(cfg.endereco||'')}</p>
+          </div>
+          <div class="info">
+            <p><strong>Venda:</strong> ${esc(venda.descricao)}</p>
+            <p><strong>Data:</strong> ${venda.data ? new Date(venda.data+'T12:00:00').toLocaleDateString('pt-BR') : hoje}</p>
+            <p><strong>Cliente:</strong> ${esc(venda.cliente||'Consumidor Final')}</p>
+            <p><strong>Pagamento:</strong> ${esc(venda.formaPagamento||'')}</p>
+          </div>
+          <table>
+            <thead><tr><th>Produto</th><th style="text-align:center">Qtd</th><th style="text-align:center">Un</th><th style="text-align:center">NCM</th><th style="text-align:center">CFOP</th><th style="text-align:center">Origem</th><th style="text-align:right">Vlr Unit.</th><th style="text-align:right">Total</th></tr></thead>
+            <tbody>${itens}</tbody>
+          </table>
+          <div class="total">Total: R$ ${fmt(venda.valor)}</div>
+          <div class="footer">Documento auxiliar para emissão de NF-e — Gerado por IDEAL ERP MEI PRO</div>
+          </body></html>`;
+
+          const blob = new Blob([html], {type:'text/html'});
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href = url; a.download = `fiscal_VENDA_${(venda.descricao||'').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}.html`;
+          a.click(); URL.revokeObjectURL(url);
+          App.ui.mostrarToast('Relação fiscal exportada!','sucesso');
+        },
+
         async finalizarVenda() {
           if (!App.state.carrinhoPDV.length) { App.ui.mostrarToast('Carrinho vazio!','erro'); return; }
           App.ui.mostrarLoading();
@@ -6743,6 +6967,8 @@ ${tl.length?`<!-- Timeline -->
             App.financeiro.renderizar();
 
             if (confirm('Deseja imprimir o cupom?')) this.imprimirCupom(venda.id);
+            // Oferecer exportar relação fiscal
+            if (confirm('Deseja exportar a Relação Fiscal para emissão de NF-e?')) this.exportarFiscalVenda(venda);
             App.ui.mostrarToast('Venda finalizada!','sucesso');
           } catch(e) {
             console.error('[PDV] Erro ao finalizar venda:', e);
@@ -7831,6 +8057,7 @@ ${tl.length?`<!-- Timeline -->
         formaPagamento: x.forma_pagamento, contaId: x.conta_id ? String(x.conta_id) : null,
         laudo: x.laudo, laudoRelatorio: x.laudo_relatorio, tecnico: x.tecnico,
         aparelho: x.aparelho||'', serie: x.serie||'', defeito: x.defeito||'',
+        cTribNac: x.c_trib_nac||x.cTribNac||'', cNbs: x.c_nbs||x.cNbs||'',
         clienteTelefone: x.cliente_telefone||'', clienteEmail: x.cliente_email||'',
         clienteDocumento: x.cliente_documento||'', clienteEndereco: x.cliente_endereco||'',
         campos: x.campos||{}, pecas: x.pecas||[], servicos: x.servicos_os||[],
@@ -7941,6 +8168,7 @@ ${tl.length?`<!-- Timeline -->
           total: os.total||0, forma_pagamento: os.formaPagamento||'',
           conta_id: os.contaId||null, laudo: os.laudo||'',
           laudo_relatorio: os.laudoRelatorio||'', tecnico: os.tecnico||'',
+          c_trib_nac: os.cTribNac||'', c_nbs: os.cNbs||'',
           campos: os.campos||{}, pecas: os.pecas||[],
           servicos_os: os.servicos||[], fotos: os.fotos||{},
           atualizacoes: os.atualizacoes||[], obs: os.obs||'' };
