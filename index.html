@@ -2718,7 +2718,7 @@
           if (id === 'servicos')   App.servicos.renderizar();
           if (id === 'os')         App.os.renderizar();
           if (id === 'orcamentos')  App.orcamentos.renderizar();
-          if (id === 'pdv')        { App.pdv.filtrarCatalogo(); App.utils.popularSelectContas(['pdvContaId']); }
+          if (id === 'pdv')        { App.pdv.filtrarCatalogo(); App.utils.popularSelectContas(['pdvContaId']); App.utils.popularSelectClientes(); }
           if (id === 'financeiro') App.financeiro.renderizar();
           if (id === 'fluxo')      App.fluxo.renderizar();
           if (id === 'dre')        App.dre.init();
@@ -5614,6 +5614,7 @@ ${osRows ? `
           }
 
           os.status = idH ? (App.state.osLista.find(x=>String(x.id)===String(idH))?.status||'Aberta') : 'Aberta';
+          os.id = idH || null;  // ESSENCIAL: passa o id para o DB.salvarOS fazer UPDATE
           App.ui.mostrarLoading();
           const saved = await DB.salvarOS(os);
           App.ui.esconderLoading();
@@ -6633,7 +6634,6 @@ ${tl.length?`<!-- Timeline -->
             const clienteSel  = document.getElementById('pdvClienteSelect').value;
 
             const venda = {
-              id:             String(Date.now()),
               cliente:        clienteNovo || App.utils.getClienteNome(clienteSel) || 'Avulso',
               clienteId:      clienteSel || null,
               descricao:      'Venda PDV',
@@ -6668,7 +6668,8 @@ ${tl.length?`<!-- Timeline -->
             if (confirm('Deseja imprimir o cupom?')) this.imprimirCupom(venda.id);
             App.ui.mostrarToast('Venda finalizada!','sucesso');
           } catch(e) {
-            App.ui.mostrarToast('Erro ao finalizar venda','erro');
+            console.error('[PDV] Erro ao finalizar venda:', e);
+            App.ui.mostrarToast('Erro ao finalizar venda: ' + (e.message||e),'erro');
           } finally {
             App.ui.esconderLoading();
           }
@@ -7267,8 +7268,9 @@ ${tl.length?`<!-- Timeline -->
 
         this.renderizarTudo();
         App.financeiro.gerarRecorrentesAutomatico();
-        // Re-renderiza o dashboard após breve delay para garantir que os gráficos apareçam
-        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 300);
+        // Re-renderiza o dashboard após delay para garantir que os gráficos apareçam
+        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 600);
+        setTimeout(() => { App.dashboard.atualizar(); }, 1200);
 
         // Eventos globais
         document.getElementById('monthSelect').addEventListener('change', () => this.renderizarTudo());
