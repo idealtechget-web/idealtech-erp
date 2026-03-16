@@ -5203,6 +5203,26 @@ ${osRows ? `
           App.ui.mostrarToast('Relação fiscal exportada!','sucesso');
         },
 
+        toggleMenu(id) {
+          const drop = document.getElementById('dropos-'+id);
+          if (!drop) return;
+          const isHidden = drop.classList.contains('hidden');
+          // Fecha todos os outros menus abertos
+          document.querySelectorAll('[id^="dropos-"]').forEach(d => d.classList.add('hidden'));
+          if (isHidden) {
+            drop.classList.remove('hidden');
+            // Fecha ao clicar fora
+            setTimeout(() => {
+              document.addEventListener('click', function fechar(e) {
+                if (!drop.contains(e.target) && e.target.id !== 'menu-os-'+id) {
+                  drop.classList.add('hidden');
+                  document.removeEventListener('click', fechar);
+                }
+              });
+            }, 10);
+          }
+        },
+
         abrirModalPrint(id){ document.getElementById('printOsId').value = id; document.getElementById('modalPrintOS').classList.remove('hidden'); },
         fecharModalPrint() { document.getElementById('modalPrintOS').classList.add('hidden'); },
 
@@ -6643,16 +6663,23 @@ ${tl.length?`<!-- Timeline -->
             const sClass = os.status==='Concluída'?'status-concluida':os.status==='Cancelada'?'status-cancelada':'status-aberta';
             return `
               <div class="bg-slate-800 rounded-xl p-5 border border-slate-700 flex flex-col hover:border-blue-500 transition shadow-lg card-item">
-                <div class="flex justify-between mb-3 items-center">
-                  <span class="bg-slate-900 px-3 py-1 rounded text-xs text-yellow-500 font-mono border border-slate-600 font-bold">OS #${os.numero||os.id}</span>
-                  <div class="flex gap-2">
-                    ${os.laudoRelatorio ? `<button onclick="App.os.gerarLaudoPDF('${os.id}')" class="text-purple-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Laudo PDF">📋</button>` : ''}
-                    ${os.laudoRelatorio ? `<button onclick="App.os.exportarLaudoHTML('${os.id}')" class="text-pink-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Exportar Laudo HTML (mobile)">📤</button>` : ''}
-                    <button onclick="App.os.gerarLinkCliente('${os.id}')" class="text-cyan-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Link Cliente">📱</button>
-                    <button onclick="App.os.abrirModalPrint('${os.id}')" class="text-green-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Imprimir">🖨️</button>
-                    <button onclick="App.os.exportarFiscal('${os.id}')" class="text-yellow-400 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition" title="Exportar Relação Fiscal">🧾</button>
-                    <button onclick="App.os.abrirModal('${os.id}')"      class="text-blue-400  bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition">✏️</button>
-                    <button onclick="App.os.confirmarExclusao('${os.id}')" class="text-red-500 bg-slate-700 px-2 py-1 rounded hover:bg-slate-600 transition">🗑️</button>
+                <div class="flex justify-between mb-3 items-center gap-2">
+                  <span class="bg-slate-900 px-3 py-1 rounded text-xs text-yellow-500 font-mono border border-slate-600 font-bold shrink-0">OS #${os.numero||os.id}</span>
+                  <div class="flex gap-1 items-center">
+                    <!-- Botões principais sempre visíveis -->
+                    <button onclick="App.os.abrirModalPrint('${os.id}')" class="text-green-400 bg-slate-700 w-8 h-8 rounded hover:bg-slate-600 transition flex items-center justify-center text-base" title="Imprimir">🖨️</button>
+                    <button onclick="App.os.abrirModal('${os.id}')"      class="text-blue-400  bg-slate-700 w-8 h-8 rounded hover:bg-slate-600 transition flex items-center justify-center text-base" title="Editar">✏️</button>
+                    <button onclick="App.os.confirmarExclusao('${os.id}')" class="text-red-500 bg-slate-700 w-8 h-8 rounded hover:bg-slate-600 transition flex items-center justify-center text-base" title="Excluir">🗑️</button>
+                    <!-- Menu "mais opções" -->
+                    <div class="relative" id="menu-os-${os.id}">
+                      <button onclick="App.os.toggleMenu('${os.id}')" class="text-slate-400 bg-slate-700 w-8 h-8 rounded hover:bg-slate-500 transition flex items-center justify-center font-bold text-lg" title="Mais opções">⋯</button>
+                      <div id="dropos-${os.id}" class="hidden absolute right-0 top-9 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 min-w-max py-1">
+                        <button onclick="App.os.gerarLinkCliente('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-cyan-400 hover:bg-slate-700 flex items-center gap-2">📱 Link do Cliente</button>
+                        <button onclick="App.os.exportarFiscal('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-slate-700 flex items-center gap-2">🧾 Relação Fiscal</button>
+                        ${os.laudoRelatorio ? `<button onclick="App.os.gerarLaudoPDF('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-purple-400 hover:bg-slate-700 flex items-center gap-2">📋 Laudo PDF</button>` : ''}
+                        ${os.laudoRelatorio ? `<button onclick="App.os.exportarLaudoHTML('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-pink-400 hover:bg-slate-700 flex items-center gap-2">📤 Laudo HTML</button>` : ''}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div class="flex items-center gap-2 mb-1">
