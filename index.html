@@ -1196,10 +1196,15 @@
             <p class="text-cyan-300 text-xs font-bold uppercase mb-1">📄 Importar via XML de NF-e</p>
             <p class="text-slate-400 text-xs">Selecione o XML da nota fiscal para preencher os campos automaticamente</p>
           </div>
-          <label class="btn-importar-xml shrink-0">
-            📂 Selecionar XML
-            <input type="file" id="prodXmlNFe" accept=".xml" class="hidden" onchange="App.estoque.importarXmlNFe(event)">
-          </label>
+          <div class="flex gap-2 shrink-0">
+            <label class="btn-importar-xml">
+              📂 Selecionar XML
+              <input type="file" id="prodXmlNFe" accept=".xml" class="hidden" onchange="App.estoque.importarXmlNFe(event)">
+            </label>
+            <button type="button" onclick="App.estoque.limparXmlProduto()" id="btnLimparXml" class="hidden px-3 py-1.5 bg-slate-700 hover:bg-red-600 text-white text-xs rounded font-bold transition">
+              ✕ Limpar
+            </button>
+          </div>
         </div>
         <div id="prodXmlPreview" class="hidden"></div>
 
@@ -3055,10 +3060,30 @@ Importar como Receita no Financeiro?`)) return;
           }
 
           App.ui.mostrarToast('Dados do XML preenchidos com sucesso!', 'sucesso');
-
+          // Mostra botão limpar
+          const btnLimpar = document.getElementById('btnLimparXml');
+          if (btnLimpar) btnLimpar.classList.remove('hidden');
           // Limpa o input file para permitir reimportar
           const fi = document.getElementById('prodXmlNFe');
           if (fi) fi.value = '';
+        },
+
+        limparXmlProduto() {
+          // Limpa o input file
+          const fi = document.getElementById('prodXmlNFe');
+          if (fi) fi.value = '';
+          // Limpa o preview
+          const preview = document.getElementById('prodXmlPreview');
+          if (preview) { preview.innerHTML = ''; preview.classList.add('hidden'); }
+          // Esconde o botão limpar
+          const btnLimpar = document.getElementById('btnLimparXml');
+          if (btnLimpar) btnLimpar.classList.add('hidden');
+          // Limpa campos do form
+          ['prodDescricao','prodNcm','prodCfop','prodOrigen','prodCodBarras','prodUnidade','prodCusto','prodVenda'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+          });
+          App.ui.mostrarToast('XML removido. Campos limpos.','info');
         },
 
         _exibirSelecaoItensXml(itens, xml, nomeArquivo) {
@@ -3089,10 +3114,15 @@ Importar como Receita no Financeiro?`)) return;
             </button>`;
           });
 
-          html += `</div></div>`;
+          html += `</div>
+            <button type="button" onclick="App.estoque.limparXmlProduto()" class="mt-2 w-full text-xs text-slate-400 hover:text-red-400 transition py-1">✕ Cancelar importação</button>
+          </div>`;
           preview.classList.remove('hidden');
           preview.innerHTML = html;
 
+          // Mostra botão limpar
+          const btnLimpar2 = document.getElementById('btnLimparXml');
+          if (btnLimpar2) btnLimpar2.classList.remove('hidden');
           // Salva temporariamente no objeto para os onclick inline acima
           App.estoque._xmlItensTemp = Array.from(itens);
           App.estoque._xmlDocTemp   = xml;
@@ -7315,9 +7345,9 @@ ${tl.length?`<!-- Timeline -->
 
         this.renderizarTudo();
         App.financeiro.gerarRecorrentesAutomatico();
-        // Re-renderiza o dashboard após delay para garantir que os gráficos apareçam
-        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 600);
-        setTimeout(() => { App.dashboard.atualizar(); }, 1200);
+        // Re-renderiza dashboard e contas após carregar
+        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 500);
+        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 1000);
 
         // Eventos globais
         document.getElementById('monthSelect').addEventListener('change', () => this.renderizarTudo());
