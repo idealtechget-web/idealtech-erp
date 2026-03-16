@@ -2840,63 +2840,95 @@
               const xml = parser.parseFromString(e.target.result, 'application/xml');
               if (xml.querySelector('parsererror')) { App.ui.mostrarToast('XML inválido.','erro'); return; }
 
+              // Helper namespace-agnostic
               const tag = (scope, nome) => {
-                const el = (scope.getElementsByTagName ? scope.getElementsByTagName(nome)[0] : null) ||
-                           (scope.getElementsByTagNameNS ? scope.getElementsByTagNameNS('*', nome)[0] : null) ||
-                           scope.querySelector(nome);
+                const el = scope.getElementsByTagName(nome)[0] ||
+                           scope.getElementsByTagNameNS('*', nome)[0];
                 return el ? el.textContent.trim() : '';
               };
 
-              // Busca namespace-agnostic (NF-e usa namespace que quebra querySelector)
-              const itens = Array.from(
-                xml.getElementsByTagName('det').length
+              // ── Detecta tipo: NF-e (det) ou NFS-e (infNFSe) ──────────────
+              const isNFSe = xml.getElementsByTagName('infNFSe').length > 0 ||
+                             xml.getElementsByTagNameNS('*','infNFSe').length > 0;
+              const isNFe  = xml.getElementsByTagName('det').length > 0 ||
+                             xml.getElementsByTagNameNS('*','det').length > 0;
+
+              if (isNFSe) {
+                // ── NFS-e: importa como receita ───────────────────────────
+                const nNFSe    = tag(xml,'nNFSe') || tag(xml,'nDPS');
+                const xDescServ= tag(xml,'xDescServ') || tag(xml,'xInfComp') || 'Serviço';
+                const vServ    = parseFloat(tag(xml,'vServ') || tag(xml,'vLiq') || '0');
+                const dhEmi    = tag(xml,'dhEmi') || tag(xml,'dCompet') || '';
+                const data     = dhEmi ? dhEmi.slice(0,10) : new Date().toISOString().slice(0,10);
+                const emitNome = tag(xml,'xNome');
+                const nfNumero = nNFSe;
+
+                if (!confirm(`NFS-e detectada!
+Número: ${nNFSe}
+Serviço: ${xDescServ.slice(0,80)}...
+Valor: R$ ${vServ.toFixed(2)}
+
+Importar como Receita no Financeiro?`)) return;
+
+                const receita = {
+                  descricao:      xDescServ.slice(0,200).toUpperCase(),
+                  valor:          vServ,
+                  data,
+                  status:         'recebido',
+                  origem:         'NFS-e',
+                  nf_emitida:     true,
+                  nf_tipo:        'NFSe',
+                  nf_numero:      nfNumero,
+                  formaPagamento: 'Pix',
+                };
+                const saved = await DB.salvarReceita(receita);
+                if (saved) {
+                  App.state.recebimentos.push({ ...receita, id: String(saved.id) });
+                  App.financeiro.renderizar();
+                  App.ui.mostrarToast(`✅ NFS-e #${nNFSe} importada como receita! R$ ${vServ.toFixed(2)}`, 'sucesso');
+                }
+
+              } else if (isNFe) {
+                // ── NF-e: importa produtos para estoque ───────────────────
+                const itens = Array.from(xml.getElementsByTagName('det').length
                   ? xml.getElementsByTagName('det')
-                  : xml.getElementsByTagNameNS('*','det')
-              );
-              if (!itens.length) { App.ui.mostrarToast('Nenhum produto (det) no XML. Verifique se é uma NF-e válida.','erro'); return; }
+                  : xml.getElementsByTagNameNS('*','det'));
 
-              let importados = 0, duplicados = 0;
-              itens.forEach(det => {
-                const prod  = det.getElementsByTagName('prod')[0] || det.getElementsByTagNameNS('*','prod')[0] || det;
-                const xProd = tag(prod,'xProd').toUpperCase();
-                const NCM   = tag(prod,'NCM').replace(/[^0-9]/g,'').slice(0,8);
-                const CFOP  = tag(prod,'CFOP').replace(/[^0-9]/g,'').slice(0,4);
-                const cEAN  = tag(prod,'cEAN') !== 'SEM GTIN' ? tag(prod,'cEAN') : '';
-                const uCom  = tag(prod,'uCom').toUpperCase() || 'UN';
-                const vUnCom= parseFloat(tag(prod,'vUnCom')||'0');
-                const origEl= det.getElementsByTagName('orig')[0] ||
-                              det.getElementsByTagNameNS('*','orig')[0];
-                const orig  = origEl ? origEl.textContent.trim().charAt(0) : '0';
+                let importados = 0, duplicados = 0;
+                for (const det of itens) {
+                  const prod  = det.getElementsByTagName('prod')[0] || det.getElementsByTagNameNS('*','prod')[0] || det;
+                  const xProd = tag(prod,'xProd').toUpperCase();
+                  const NCM   = tag(prod,'NCM').replace(/[^0-9]/g,'').slice(0,8);
+                  const CFOP  = tag(prod,'CFOP').replace(/[^0-9]/g,'').slice(0,4);
+                  const cEANr = tag(prod,'cEAN');
+                  const cEAN  = cEANr !== 'SEM GTIN' ? cEANr : '';
+                  const uCom  = tag(prod,'uCom').toUpperCase() || 'UN';
+                  const vUnCom= parseFloat(tag(prod,'vUnCom')||'0');
+                  const origEl= det.getElementsByTagName('orig')[0] || det.getElementsByTagNameNS('*','orig')[0];
+                  const orig  = origEl ? origEl.textContent.trim().charAt(0) : '0';
 
-                if (!xProd || !NCM) return; // skip invalid
+                  if (!xProd || !NCM) continue;
 
-                // Check if already exists (by EAN or description + NCM)
-                const jaExiste = App.state.produtos.some(p =>
-                  (cEAN && (p.codigo_barras||p.ean||'') === cEAN) ||
-                  ((p.descricao||p.nome||'').toUpperCase() === xProd && (p.ncm||'') === NCM)
-                );
-                if (jaExiste) { duplicados++; return; }
+                  const jaExiste = App.state.produtos.some(p =>
+                    (cEAN && (p.codigo_barras||p.ean||'') === cEAN) ||
+                    ((p.descricao||'').toUpperCase() === xProd && (p.ncm||'') === NCM)
+                  );
+                  if (jaExiste) { duplicados++; continue; }
 
-                App.state.produtos.push({
-                  id:                String(Date.now() + Math.random()),
-                  descricao:         xProd,
-                  ncm:               NCM,
-                  cfop:              CFOP,
-                  codigo_barras:     cEAN,
-                  ean:               cEAN,
-                  unidade:           uCom,
-                  preco_venda:       vUnCom,
-                  preco_custo:       0,
-                  quantidade_estoque:0,
-                  origem:            orig,
-                  ativo:             true
-                });
-                importados++;
-              });
+                  const novoProd = { descricao:xProd, ncm:NCM, cfop:CFOP,
+                    codigo_barras:cEAN, ean:cEAN, unidade:uCom,
+                    preco_venda:vUnCom, preco_custo:0, quantidade_estoque:0,
+                    origem:orig, ativo:true };
+                  const saved = await DB.salvarProduto(novoProd);
+                  if (saved) { App.state.produtos.push({ ...novoProd, id: String(saved.id) }); importados++; }
+                }
+                this.renderizar();
+                App.ui.mostrarToast(`✅ ${importados} produto(s) importado(s).${duplicados>0?' '+duplicados+' duplicado(s) ignorado(s).':''}`, 'sucesso');
 
-              await Promise.all(App.state.produtos.slice(-importados).map(p => DB.salvarProduto(p)));
-              this.renderizar();
-              App.ui.mostrarToast(`✅ ${importados} produto(s) importado(s). ${duplicados > 0 ? duplicados+' duplicado(s) ignorado(s).' : ''}`, 'sucesso');
+              } else {
+                App.ui.mostrarToast('XML não reconhecido. Envie uma NF-e ou NFS-e válida.','erro');
+              }
+
             } catch(err) {
               console.error('[XML Lote] Erro:', err);
               App.ui.mostrarToast('Erro ao processar XML: '+err.message,'erro');
