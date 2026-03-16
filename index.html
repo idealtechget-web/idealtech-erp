@@ -2841,25 +2841,31 @@
               if (xml.querySelector('parsererror')) { App.ui.mostrarToast('XML inválido.','erro'); return; }
 
               const tag = (scope, nome) => {
-                const el = scope.querySelector(nome) ||
-                           (scope.getElementsByTagNameNS ? scope.getElementsByTagNameNS('*', nome)[0] : null);
+                const el = (scope.getElementsByTagName ? scope.getElementsByTagName(nome)[0] : null) ||
+                           (scope.getElementsByTagNameNS ? scope.getElementsByTagNameNS('*', nome)[0] : null) ||
+                           scope.querySelector(nome);
                 return el ? el.textContent.trim() : '';
               };
 
-              const itens = Array.from(xml.querySelectorAll('det'));
-              if (!itens.length) { App.ui.mostrarToast('Nenhum produto (det) no XML.','erro'); return; }
+              // Busca namespace-agnostic (NF-e usa namespace que quebra querySelector)
+              const itens = Array.from(
+                xml.getElementsByTagName('det').length
+                  ? xml.getElementsByTagName('det')
+                  : xml.getElementsByTagNameNS('*','det')
+              );
+              if (!itens.length) { App.ui.mostrarToast('Nenhum produto (det) no XML. Verifique se é uma NF-e válida.','erro'); return; }
 
               let importados = 0, duplicados = 0;
               itens.forEach(det => {
-                const prod  = det.querySelector('prod') || det;
+                const prod  = det.getElementsByTagName('prod')[0] || det.getElementsByTagNameNS('*','prod')[0] || det;
                 const xProd = tag(prod,'xProd').toUpperCase();
                 const NCM   = tag(prod,'NCM').replace(/[^0-9]/g,'').slice(0,8);
                 const CFOP  = tag(prod,'CFOP').replace(/[^0-9]/g,'').slice(0,4);
                 const cEAN  = tag(prod,'cEAN') !== 'SEM GTIN' ? tag(prod,'cEAN') : '';
                 const uCom  = tag(prod,'uCom').toUpperCase() || 'UN';
                 const vUnCom= parseFloat(tag(prod,'vUnCom')||'0');
-                const origEl= det.querySelector('orig') ||
-                              (det.getElementsByTagNameNS ? det.getElementsByTagNameNS('*','orig')[0] : null);
+                const origEl= det.getElementsByTagName('orig')[0] ||
+                              det.getElementsByTagNameNS('*','orig')[0];
                 const orig  = origEl ? origEl.textContent.trim().charAt(0) : '0';
 
                 if (!xProd || !NCM) return; // skip invalid
@@ -2891,9 +2897,13 @@
               await Promise.all(App.state.produtos.slice(-importados).map(p => DB.salvarProduto(p)));
               this.renderizar();
               App.ui.mostrarToast(`✅ ${importados} produto(s) importado(s). ${duplicados > 0 ? duplicados+' duplicado(s) ignorado(s).' : ''}`, 'sucesso');
-            } catch(err) { App.ui.mostrarToast('Erro ao processar XML: '+err.message,'erro'); }
+            } catch(err) {
+              console.error('[XML Lote] Erro:', err);
+              App.ui.mostrarToast('Erro ao processar XML: '+err.message,'erro');
+            }
             finally { event.target.value = ''; }
           };
+          reader.onerror = () => App.ui.mostrarToast('Erro ao ler o arquivo XML.','erro');
           reader.readAsText(file, 'UTF-8');
         },
 
@@ -2923,7 +2933,10 @@
 
               // Pode haver múltiplos <det> (itens). Pega o primeiro se não houver id
               // e exibe lista para escolher se houver mais de um.
-              const itens = xml.querySelectorAll('det');
+              // Busca namespace-agnostic
+              const itens = xml.getElementsByTagName('det').length
+                ? Array.from(xml.getElementsByTagName('det'))
+                : Array.from(xml.getElementsByTagNameNS('*','det'));
               if (!itens || itens.length === 0) {
                 App.ui.mostrarToast('Nenhum item (det) encontrado no XML.', 'erro');
                 return;
@@ -2937,25 +2950,28 @@
               }
 
             } catch (err) {
+              console.error('[XML NFe] Erro:', err);
               App.ui.mostrarToast('Erro ao processar XML: ' + err.message, 'erro');
             }
           };
+          reader.onerror = () => App.ui.mostrarToast('Erro ao ler o arquivo XML.','erro');
           reader.readAsText(file, 'UTF-8');
         },
 
         _preencherCamposPorXmlItem(det, xml, nomeArquivo) {
           const tag = (scope, nome) => {
-            const el = scope.querySelector(nome) ||
+            const el = (scope.getElementsByTagName ? scope.getElementsByTagName(nome)[0] : null) ||
                        (scope.getElementsByTagNameNS ? scope.getElementsByTagNameNS('*', nome)[0] : null);
             return el ? el.textContent.trim() : '';
           };
           const tagGlobal = (nome) => {
-            const el = xml.querySelector(nome) ||
+            const el = xml.getElementsByTagName(nome)[0] ||
                        xml.getElementsByTagNameNS('*', nome)[0];
             return el ? el.textContent.trim() : '';
           };
 
-          const prod = det.querySelector('prod') || det;
+          const prod = det.getElementsByTagName('prod')[0] ||
+                       det.getElementsByTagNameNS('*','prod')[0] || det;
 
           // Campos do produto na NF-e
           const xProd  = tag(prod, 'xProd')  || '';   // Descrição
@@ -2967,8 +2983,8 @@
           const vUnCom = tag(prod, 'vUnCom') || '0';  // Valor unitário comercial
           const orig   = (() => {
             // Origem vem em imposto > ICMS > ICMSxx > orig
-            const origEl = det.querySelector('orig') ||
-                           (det.getElementsByTagNameNS ? det.getElementsByTagNameNS('*', 'orig')[0] : null);
+            const origEl = det.getElementsByTagName('orig')[0] ||
+                           det.getElementsByTagNameNS('*', 'orig')[0];
             return origEl ? origEl.textContent.trim() : '0';
           })();
 
@@ -3036,7 +3052,7 @@
             <div class="space-y-1 max-h-48 overflow-y-auto scroll-personalizado pr-1">`;
 
           itens.forEach((det, i) => {
-            const prod  = det.querySelector('prod') || det;
+            const prod  = det.getElementsByTagName('prod')[0] || det.getElementsByTagNameNS('*','prod')[0] || det;
             const xProd = tag(prod, 'xProd') || `Item ${i+1}`;
             const ncm   = tag(prod, 'NCM')   || '-';
             const cfop  = tag(prod, 'CFOP')  || '-';
