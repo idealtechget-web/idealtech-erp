@@ -438,9 +438,9 @@
     <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700 pb-4">
       <div>
         <h1 class="text-3xl font-bold text-white flex items-center gap-2">
-         IDEAL ERP <span class="text-xs bg-yellow-500 text-black px-2 py-1 rounded font-bold">MEI PRO</span>
+          ⚡ IDEAL ERP <span class="text-xs bg-yellow-500 text-black px-2 py-1 rounded font-bold">MEI PRO</span>
         </h1>
-        <p class="text-slate-400 text-sm mt-1">by Zenilson Araújo de Sousa (IdealTech — Gestão Completa para MEI)</p>
+        <p class="text-slate-400 text-sm mt-1">by IdealTech — Gestão Completa para MEI</p>
       </div>
       <div class="flex items-center gap-4">
         <button onclick="App.configuracao.abrirModalBackup()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-bold shadow transition">💾 Backup</button>
@@ -5443,6 +5443,10 @@ ${osRows ? `
 
           return `<div class="${cls}" style="font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;max-width:780px;margin:0 auto;padding:0">
 
+            ${!cfg.nome ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:#92400e">
+              ⚠️ <strong>Dados da empresa não configurados.</strong> Acesse <strong>Config</strong> e preencha o nome, CNPJ, telefone e endereço para aparecerem na impressão.
+            </div>` : ''}
+
             <!-- CABEÇALHO -->
             <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:28px 32px 20px;border-bottom:3px solid #1e293b;margin-bottom:0">
               <div style="display:flex;align-items:center;gap:16px">
@@ -5615,6 +5619,10 @@ ${osRows ? `
           const hasItens = rowsPecas || rowsServicos;
 
           return `<div class="${cls}" style="font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;max-width:780px;margin:0 auto;padding:0">
+
+            ${!cfg.nome ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:#92400e">
+              ⚠️ <strong>Dados da empresa não configurados.</strong> Acesse <strong>Config</strong> e preencha o nome, CNPJ, telefone e endereço.
+            </div>` : ''}
 
             <!-- CABEÇALHO RECIBO -->
             <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:28px 32px 20px;border-bottom:3px solid #1e293b">
@@ -8189,16 +8197,20 @@ ${tl.length?`<!-- Timeline -->
       async salvarOS(os) {
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarOS: uid nulo!'); return null; }
-        const row = { user_id: uid, numero: os.numero||'', cliente: os.cliente||'',
+        const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
+        const row = { user_id: uid, numero: u(os.numero||''), cliente: u(os.cliente||''),
           cliente_id: os.clienteId||null, tipo: os.tipo||'manutencao',
           status: os.status||'Aberta', data: os.data||null, previsao: os.previsao||null,
           total: os.total||0, forma_pagamento: os.formaPagamento||'',
-          conta_id: os.contaId||null, laudo: os.laudo||'',
-          laudo_relatorio: os.laudoRelatorio||'', tecnico: os.tecnico||'',
-          c_trib_nac: os.cTribNac||'', c_nbs: os.cNbs||'',
+          conta_id: os.contaId||null, laudo: u(os.laudo||''),
+          laudo_relatorio: u(os.laudoRelatorio||''), tecnico: u(os.tecnico||''),
+          c_trib_nac: u(os.cTribNac||''), c_nbs: u(os.cNbs||''),
           campos: os.campos||{}, pecas: os.pecas||[],
           servicos_os: os.servicos||[], fotos: os.fotos||{},
-          atualizacoes: os.atualizacoes||[], obs: os.obs||'' };
+          atualizacoes: os.atualizacoes||[], obs: u(os.obs||''),
+          aparelho: u(os.aparelho||''), serie: u(os.serie||''), defeito: u(os.defeito||''),
+          cliente_telefone: u(os.clienteTelefone||''), cliente_email: u(os.clienteEmail||''),
+          cliente_documento: u(os.clienteDocumento||''), cliente_endereco: u(os.clienteEndereco||'') };
         if (os.id && !os.id.startsWith('tmp_')) {
           const { data } = await supa.from('os').update(row).eq('id', os.id).eq('user_id', uid).select().single();
           return data;
