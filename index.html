@@ -89,13 +89,13 @@
     #sidebar {
       position: fixed; top: 0; left: 0; height: 100vh; width: 220px;
       background: #0f172a; border-right: 1px solid #1e293b;
-      display: flex; flex-direction: column; z-index: 100;
+      display: flex; flex-direction: column; z-index: 50;
       transition: transform 0.25s ease;
       overflow-y: auto;
     }
     #sidebar-overlay {
       display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.6); z-index: 99;
+      background: rgba(0,0,0,0.6); z-index: 40;
     }
     #main-content {
       margin-left: 220px; min-height: 100vh;
@@ -2770,7 +2770,9 @@
           const esc    = App.utils.escapeHTML.bind(App.utils);
 
           const mkPizza = (canvasId, legendaId, dados, cores) => {
-            const ctx = document.getElementById(canvasId)?.getContext('2d');
+            const canvasElem = document.getElementById(canvasId);
+            if (!canvasElem || canvasElem.offsetWidth === 0) return; // não visível ainda
+            const ctx = canvasElem.getContext('2d');
             if (!ctx) return;
             const key = canvasId;
             if (this._graficoPizzas[key]) this._graficoPizzas[key].destroy();
@@ -2838,6 +2840,9 @@
         atualizarGrafico() {
           const ctx = document.getElementById('graficoMensal')?.getContext('2d');
           if (!ctx) return;
+          // Se canvas não tem largura ainda (DOM não pintado), agendar e sair
+          const canvasEl = document.getElementById('graficoMensal');
+          if (!canvasEl || canvasEl.offsetWidth === 0) return; // canvas não visível, sai sem loop
           if (App.state.grafico) App.state.grafico.destroy();
 
           const meses = [], receitas = [], despesas = [];
@@ -2897,7 +2902,9 @@
           // Fecha sidebar só no mobile
           if (window.innerWidth < 768) this.fecharSidebar();
 
-          if (id === 'dashboard')  { App.dashboard.atualizar(); setTimeout(() => App.dashboard.atualizar(), 200); }
+          if (id === 'dashboard') {
+            requestAnimationFrame(() => App.dashboard.atualizar());
+          }
           if (id === 'estoque')    App.estoque.renderizar();
           if (id === 'servicos')   App.servicos.renderizar();
           if (id === 'os')         App.os.renderizar();
@@ -5367,23 +5374,37 @@ ${osRows ? `
           App.ui.mostrarToast('Relação fiscal exportada!','sucesso');
         },
 
+        _dropListener: null,
+
         toggleMenu(id) {
           const drop = document.getElementById('dropos-'+id);
           if (!drop) return;
+          // Remove listener zumbi anterior
+          if (this._dropListener) {
+            document.removeEventListener('click', this._dropListener);
+            this._dropListener = null;
+          }
           const isHidden = drop.classList.contains('hidden');
-          // Fecha todos os outros menus abertos
+          // Fecha todos os dropdowns abertos
           document.querySelectorAll('[id^="dropos-"]').forEach(d => d.classList.add('hidden'));
           if (isHidden) {
             drop.classList.remove('hidden');
-            // Fecha ao clicar fora
-            setTimeout(() => {
-              document.addEventListener('click', function fechar(e) {
-                if (!drop.contains(e.target) && e.target.id !== 'menu-os-'+id) {
-                  drop.classList.add('hidden');
-                  document.removeEventListener('click', fechar);
-                }
-              });
-            }, 10);
+            this._dropListener = (e) => {
+              if (!e.target.closest('.dropos-wrap')) {
+                drop.classList.add('hidden');
+                document.removeEventListener('click', this._dropListener);
+                this._dropListener = null;
+              }
+            };
+            setTimeout(() => document.addEventListener('click', this._dropListener), 10);
+          }
+        },
+
+        fecharDropdowns() {
+          document.querySelectorAll('[id^="dropos-"]').forEach(el => el.classList.add('hidden'));
+          if (this._dropListener) {
+            document.removeEventListener('click', this._dropListener);
+            this._dropListener = null;
           }
         },
 
@@ -6843,13 +6864,13 @@ ${tl.length?`<!-- Timeline -->
                     <button onclick="App.os.abrirModal('${os.id}')"      class="text-blue-400  bg-slate-700 w-8 h-8 rounded hover:bg-slate-600 transition flex items-center justify-center text-base" title="Editar">✏️</button>
                     <button onclick="App.os.confirmarExclusao('${os.id}')" class="text-red-500 bg-slate-700 w-8 h-8 rounded hover:bg-slate-600 transition flex items-center justify-center text-base" title="Excluir">🗑️</button>
                     <!-- Menu "mais opções" -->
-                    <div class="relative" id="menu-os-${os.id}">
+                    <div class="relative dropos-wrap" id="menu-os-${os.id}">
                       <button onclick="App.os.toggleMenu('${os.id}')" class="text-slate-400 bg-slate-700 w-8 h-8 rounded hover:bg-slate-500 transition flex items-center justify-center font-bold text-lg" title="Mais opções">⋯</button>
                       <div id="dropos-${os.id}" class="hidden absolute right-0 top-9 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 min-w-max py-1">
-                        <button onclick="App.os.gerarLinkCliente('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-cyan-400 hover:bg-slate-700 flex items-center gap-2">📱 Link do Cliente</button>
-                        <button onclick="App.os.exportarFiscal('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-slate-700 flex items-center gap-2">🧾 Relação Fiscal</button>
-                        ${os.laudoRelatorio ? `<button onclick="App.os.gerarLaudoPDF('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-purple-400 hover:bg-slate-700 flex items-center gap-2">📋 Laudo PDF</button>` : ''}
-                        ${os.laudoRelatorio ? `<button onclick="App.os.exportarLaudoHTML('${os.id}');App.os.toggleMenu('${os.id}')" class="w-full text-left px-4 py-2 text-sm text-pink-400 hover:bg-slate-700 flex items-center gap-2">📤 Laudo HTML</button>` : ''}
+                        <button onclick="App.os.gerarLinkCliente('${os.id}');App.os.fecharDropdowns()" class="w-full text-left px-4 py-2 text-sm text-cyan-400 hover:bg-slate-700 flex items-center gap-2">📱 Link do Cliente</button>
+                        <button onclick="App.os.exportarFiscal('${os.id}');App.os.fecharDropdowns()" class="w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-slate-700 flex items-center gap-2">🧾 Relação Fiscal</button>
+                        ${os.laudoRelatorio ? `<button onclick="App.os.gerarLaudoPDF('${os.id}');App.os.fecharDropdowns()" class="w-full text-left px-4 py-2 text-sm text-purple-400 hover:bg-slate-700 flex items-center gap-2">📋 Laudo PDF</button>` : ''}
+                        ${os.laudoRelatorio ? `<button onclick="App.os.exportarLaudoHTML('${os.id}');App.os.fecharDropdowns()" class="w-full text-left px-4 py-2 text-sm text-pink-400 hover:bg-slate-700 flex items-center gap-2">📤 Laudo HTML</button>` : ''}
                       </div>
                     </div>
                   </div>
@@ -7741,6 +7762,19 @@ ${tl.length?`<!-- Timeline -->
         // Este método é mantido por compatibilidade mas não faz nada
       },
 
+      // Tenta atualizar o dashboard até o canvas estar visível (máx 20 tentativas)
+      _tentarAtualizarDashboard(tentativa) {
+        const canvas = document.getElementById('graficoMensal');
+        const visivel = canvas && canvas.offsetWidth > 0;
+        if (visivel) {
+          App.dashboard.atualizar();
+          App.contas.renderizar();
+        } else if (tentativa < 20) {
+          // Canvas ainda sem dimensão — tenta novamente em 100ms
+          setTimeout(() => App._tentarAtualizarDashboard(tentativa + 1), 100);
+        }
+      },
+
       renderizarTudo() {
         App.dashboard.atualizar();
         App.contas.renderizar();
@@ -7771,10 +7805,6 @@ ${tl.length?`<!-- Timeline -->
 
         this.renderizarTudo();
         App.financeiro.gerarRecorrentesAutomatico();
-        // Re-renderiza dashboard e contas após carregar
-        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 300);
-        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 800);
-        setTimeout(() => { App.dashboard.atualizar(); }, 1500);
 
         // Eventos globais — registra só uma vez
         if (!App._listenersRegistrados) {
@@ -8083,22 +8113,20 @@ ${tl.length?`<!-- Timeline -->
         this._iniciado = true;
         this.user = user;
 
-        // Mostra tela de auth com mensagem de carregamento
         this._loading('Carregando seus dados...');
 
+        // Tenta carregar sem timeout — aguarda quanto for necessário
+        let carregouOk = false;
         try {
-          // Timeout de 10 segundos — se travar, abre mesmo assim
-          await Promise.race([
-            DB.carregarTudo(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
-          ]);
+          await DB.carregarTudo();
+          carregouOk = true;
         } catch(e) {
           console.error('[Auth] Erro ao carregar dados:', e.message);
         } finally {
           this._carregando = false;
         }
 
-        // Dados prontos (ou timeout) — mostra o ERP
+        // Mostra o ERP com os dados (ou vazio se falhou)
         this._loading(false);
         document.getElementById('usuarioEmail').textContent = user.email;
         const emailMobile = document.getElementById('usuarioEmailMobile');
@@ -8107,6 +8135,20 @@ ${tl.length?`<!-- Timeline -->
         if (bu) { bu.classList.remove('hidden'); bu.style.display = 'flex'; }
         this._mostrarERP();
         App.init();
+        App._tentarAtualizarDashboard(0);
+
+        // Se falhou ao carregar, tenta novamente em background após 3s
+        if (!carregouOk) {
+          this._loading('Reconectando...');
+          setTimeout(async () => {
+            try {
+              await DB.carregarTudo();
+              App.init();
+              App._tentarAtualizarDashboard(0);
+            } catch(e2) { console.error('[Auth] Retry falhou:', e2.message); }
+            finally { this._loading(false); }
+          }, 3000);
+        }
       },
 
       _mostrarTelaAuth() {
