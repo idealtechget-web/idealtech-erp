@@ -28,10 +28,21 @@
       #app { display: block !important; }
       .flex-1.flex.flex-col { display: block !important; }
     }
-    input[type="text"]:not([id*="Senha"]):not([id*="senha"]):not([id*="Email"]):not([id*="email"]):not([id*="Xml"]):not([id*="xml"]):not([id*="busca"]):not([id*="Busca"]):not([id*="Ncm"]):not([id*="ncm"]):not([id*="Cfop"]):not([id*="cfop"]):not([id*="Ean"]):not([id*="ean"]):not([id*="Numeros"]):not([id*="numero"]):not([id*="Cod"]):not([placeholder*="pesquis"]),
-    textarea:not([id*="laudo"]):not([id*="Laudo"]):not([id*="relatorio"]) {
+    /* Forçar maiúsculo em campos de texto */
+    #modalOS input[type="text"], #modalOS textarea:not(#osLaudoRelatorio),
+    #modalOrcamento input[type="text"],
+    #modalProduto input[type="text"],
+    #modalConta input[type="text"],
+    #modalCliente input[type="text"],
+    #modalServ input[type="text"],
+    #formLogin input[type="text"],
+    #formCadastro input[type="text"] {
       text-transform: uppercase;
     }
+    /* Campos globais de busca e financeiro */
+    #osClienteNovo, #orcClienteNovo, #pdvClienteNovo,
+    #receitaCliente, #gastoDescricao, #receitaDescricao,
+    #cadNome { text-transform: uppercase; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background-color: #0f172a;
@@ -78,7 +89,7 @@
     #sidebar {
       position: fixed; top: 0; left: 0; height: 100vh; width: 220px;
       background: #0f172a; border-right: 1px solid #1e293b;
-      display: none; flex-direction: column; z-index: 100;
+      display: flex; flex-direction: column; z-index: 100;
       transition: transform 0.25s ease;
       overflow-y: auto;
     }
@@ -110,17 +121,19 @@
     .nav-item .nav-icon { font-size: 15px; width: 20px; text-align: center; }
     .nav-divider { border-top: 1px solid #1e293b; margin: 6px 0; }
     #btn-menu-mobile {
-      display: none; position: fixed; top: 12px; left: 12px;
-      z-index: 101; background: #1e293b; border: 1px solid #334155;
-      color: white; border-radius: 8px; padding: 8px 12px;
-      font-size: 18px; cursor: pointer; line-height: 1;
+      display: none; position: fixed; top: 10px; left: 10px;
+      z-index: 200; background: #1e293b; border: 1px solid #334155;
+      color: white; border-radius: 8px; padding: 8px 14px;
+      font-size: 20px; cursor: pointer; line-height: 1;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
     }
     @media (max-width: 768px) {
       #sidebar { transform: translateX(-100%); }
       #sidebar.aberto { transform: translateX(0); }
+      #sidebar-overlay { display: none; }
       #sidebar-overlay.aberto { display: block; }
-      #main-content { margin-left: 0; }
-      #btn-menu-mobile { display: block; }
+      #main-content { margin-left: 0 !important; padding-top: 56px; }
+      #btn-menu-mobile { display: flex; }
     }
     @media print {
       #sidebar, #sidebar-overlay, #btn-menu-mobile { display: none !important; }
@@ -497,11 +510,7 @@
     </div>
   </div>
 
-  <!-- ══ BARRA DO USUÁRIO (topo do ERP) ══════════════════════════════════════ -->
-  <div id="barraUsuario" class="hidden bg-slate-900 border-b border-slate-800 px-4 py-2 flex justify-between items-center text-xs">
-    <span class="text-slate-400">👤 <span id="usuarioEmail" class="text-white font-semibold"></span></span>
-    <button onclick="Auth.sair()" class="text-slate-500 hover:text-red-400 transition font-bold">Sair</button>
-  </div>
+  <!-- barraUsuario movida para dentro da sidebar -->
 
   <!-- Botão mobile -->
   <button id="btn-menu-mobile" onclick="App.aba.toggleSidebar()">☰</button>
@@ -584,6 +593,11 @@
     <div style="padding:12px 16px;border-top:1px solid #1e293b;display:flex;gap:8px">
       <button onclick="App.configuracao.abrirModalBackup()" style="flex:1;background:#1e3a5f;border:none;color:#60a5fa;border-radius:6px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer">💾 Backup</button>
       <button onclick="App.configuracao.abrirModal()" style="flex:1;background:#2d1b69;border:none;color:#a78bfa;border-radius:6px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer">⚙️ Config</button>
+    </div>
+    <!-- Usuário logado -->
+    <div id="barraUsuario" class="hidden" style="padding:10px 14px;border-top:1px solid #1e293b;display:none;align-items:center;justify-content:space-between;gap:6px">
+      <span style="font-size:11px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">👤 <span id="usuarioEmail" style="color:#e2e8f0;font-weight:600"></span></span>
+      <button onclick="Auth.sair()" style="background:#7f1d1d;border:none;color:#fca5a5;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Sair</button>
     </div>
   </nav>
 
@@ -2327,6 +2341,26 @@
           });
         },
 
+        // Normaliza campos de texto para maiúsculo em um objeto
+        upperObj(obj) {
+          if (!obj || typeof obj !== 'object') return obj;
+          const skip = new Set(['id','user_id','tipo','status','origem','cor','icone',
+            'contaId','conta_id','categoriaId','categoria_id','clienteId','cliente_id',
+            'data','valor','preco','preco_custo','preco_venda','total','saldo_inicial',
+            'saldoInicial','nf_numero','logo','campos','pecas','servicos','servicos_os',
+            'servicos_orc','fotos','atualizacoes','fitid','quantidade_estoque','ativo',
+            'recorrente','recorrenteTipo','nf_emitida','nf_tipo','nf_xml_ref',
+            'nf_xml_filename','formaPagamento','forma_pagamento','cTribNac','cNbs',
+            'c_trib_nac','c_nbs','laudoRelatorio','laudo_relatorio']);
+          const result = {};
+          for (const [k, v] of Object.entries(obj)) {
+            if (skip.has(k)) { result[k] = v; }
+            else if (typeof v === 'string') { result[k] = v.toUpperCase(); }
+            else { result[k] = v; }
+          }
+          return result;
+        },
+
         popularSelectClientes() {
           ['pdvClienteSelect','osClienteSelect','receitaClienteSelect','orcClienteSelect'].forEach(selId => {
             const sel = document.getElementById(selId);
@@ -2842,12 +2876,17 @@
       // -----------------------------------------------------------------------
       aba: {
         abrirSidebar() {
-          document.getElementById('sidebar').classList.remove('-translate-x-full');
-          document.getElementById('sidebarOverlay').classList.remove('hidden');
+          document.getElementById('sidebar').classList.add('aberto');
+          document.getElementById('sidebar-overlay').classList.add('aberto');
         },
         fecharSidebar() {
-          document.getElementById('sidebar').classList.add('-translate-x-full');
-          document.getElementById('sidebarOverlay').classList.add('hidden');
+          document.getElementById('sidebar').classList.remove('aberto');
+          document.getElementById('sidebar-overlay').classList.remove('aberto');
+        },
+        toggleSidebar() {
+          const s = document.getElementById('sidebar');
+          if (s.classList.contains('aberto')) this.fecharSidebar();
+          else this.abrirSidebar();
         },
         trocar(id) {
           document.querySelectorAll('.aba-conteudo').forEach(el => el.classList.add('hidden'));
@@ -2855,9 +2894,10 @@
           document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('ativo'));
           const btn = document.getElementById('btn-' + id);
           if (btn) btn.classList.add('ativo');
-          this.fecharSidebar();
+          // Fecha sidebar só no mobile
+          if (window.innerWidth < 768) this.fecharSidebar();
 
-          if (id === 'dashboard')  App.dashboard.atualizar();
+          if (id === 'dashboard')  { App.dashboard.atualizar(); setTimeout(() => App.dashboard.atualizar(), 200); }
           if (id === 'estoque')    App.estoque.renderizar();
           if (id === 'servicos')   App.servicos.renderizar();
           if (id === 'os')         App.os.renderizar();
@@ -2925,7 +2965,7 @@
               const idx = App.state.produtos.findIndex(x => String(x.id) === String(idH));
               if (idx > -1) App.state.produtos[idx] = produto;
             } else {
-              App.state.produtos.push(produto);
+              App.state.produtos.push(App.utils.upperObj(produto));
             }
           }
           this.fecharModal();
@@ -3026,7 +3066,8 @@ Importar como Receita no Financeiro?`)) return;
                 };
                 const saved = await DB.salvarReceita(receita);
                 if (saved) {
-                  App.state.recebimentos.push({ ...receita, id: String(saved.id) });
+                  App.state.recebimentos.push(App.utils.upperObj({ ...receita, id: String(saved.id) }));
+
                   App.financeiro.renderizar();
                   App.ui.mostrarToast(`✅ NFS-e #${nNFSe} importada como receita! R$ ${vServ.toFixed(2)}`, 'sucesso');
                 }
@@ -3070,7 +3111,7 @@ Importar como Receita no Financeiro?`)) return;
                     preco_venda:vUnCom, preco_custo:0, quantidade_estoque:qCom,
                     origem:orig, ativo:true };
                   const saved = await DB.salvarProduto(novoProd);
-                  if (saved) { App.state.produtos.push({ ...novoProd, id: String(saved.id) }); importados++; }
+                  if (saved) { App.state.produtos.push(App.utils.upperObj({ ...novoProd, id: String(saved.id) })); importados++; }
                 }
                 this.renderizar();
                 App.ui.mostrarToast(`✅ ${importados} produto(s) novo(s) importado(s)${duplicados>0?'. '+duplicados+' já existente(s) com estoque atualizado':''}!`, 'sucesso');
@@ -3089,7 +3130,8 @@ Importar como Receita no Financeiro?`)) return;
                   };
                   const savedDesp = await DB.salvarDespesa(despesa);
                   if (savedDesp) {
-                    App.state.gastos.push({ ...despesa, id: String(savedDesp.id) });
+                    App.state.gastos.push(App.utils.upperObj({ ...despesa, id: String(savedDesp.id) }));
+
                     App.financeiro.renderizar();
                     App.ui.mostrarToast(`💸 Despesa R$ ${vNF.toFixed(2)} lançada!`, 'sucesso');
                   }
@@ -3355,7 +3397,7 @@ Importar como Receita no Financeiro?`)) return;
                     origem: String(row.origem)
                   };
                   if (existente) { Object.assign(existente, pd); DB.salvarProduto(existente); atualizados++; }
-                  else           { DB.salvarProduto(pd).then(s => { if(s){ pd.id=String(s.id); App.state.produtos.push(pd); importados++; } }); }
+                  else           { DB.salvarProduto(pd).then(s => { if(s){ pd.id=String(s.id); App.state.produtos.push(App.utils.upperObj(pd)); importados++; } }); }
                 } catch(err) { erros.push(`Linha ${i+2}: ${err.message}`); }
               });
               document.getElementById('importarExcelInput').value = '';
@@ -3381,7 +3423,7 @@ Importar como Receita no Financeiro?`)) return;
           const valor = money.parseBR(document.getElementById('addValorServico').value);
           if (!nome || valor <= 0) { App.ui.mostrarToast('Insira nome e valor válido','erro'); return; }
           const saved = await DB.salvarServico({ nome, valor, ativo: true });
-          if (saved) App.state.servicos.push({ ...saved, id: String(saved.id) });
+          if (saved) App.state.servicos.push(App.utils.upperObj({ ...saved, id: String(saved.id) }));
           document.getElementById('addNomeServico').value  = '';
           document.getElementById('addValorServico').value = '';
           this.renderizar();
@@ -3590,7 +3632,7 @@ Importar como Receita no Financeiro?`)) return;
               const idx = App.state.clientes.findIndex(c => String(c.id) === String(id));
               if (idx > -1) App.state.clientes[idx] = Object.assign({}, App.state.clientes[idx], cliente, { id: cliente.id });
             } else {
-              App.state.clientes.push(cliente);
+              App.state.clientes.push(App.utils.upperObj(cliente));
             }
           }
           this.fecharModal();
@@ -4029,7 +4071,7 @@ ${el.innerHTML}
           const cor   = document.getElementById('catCor').value;
           if (!nome) { App.ui.mostrarToast('Digite o nome da categoria','erro'); return; }
           const savedCat = await DB.salvarCategoria({ nome, tipo, icone, cor });
-          if (savedCat) App.state.categorias.push({ ...savedCat, id: String(savedCat.id) });
+          if (savedCat) App.state.categorias.push(App.utils.upperObj({ ...savedCat, id: String(savedCat.id) }));
           document.getElementById('catNome').value  = '';
           document.getElementById('catIcone').value = '';
           this.renderizar();
@@ -4116,7 +4158,7 @@ ${el.innerHTML}
               const idx = App.state.contas.findIndex(x => String(x.id) === String(idH));
               if (idx > -1) App.state.contas[idx] = { ...App.state.contas[idx], banco, nome, tipo, saldoInicial:si, cor };
             } else {
-              App.state.contas.push(c);
+              App.state.contas.push(App.utils.upperObj(c));
             }
           }
           this.fecharModal();
@@ -4386,10 +4428,12 @@ ${el.innerHTML}
           };
           if (t.sinal > 0) {
             // Crédito → Receita
-            App.state.recebimentos.push({ ...base, cliente: '', status: 'recebido', formaPagamento: 'Transferência' });
+            App.state.recebimentos.push(App.utils.upperObj({ ...base, cliente: '', status: 'recebido', formaPagamento: 'Transferência' }));
+
           } else {
             // Débito → Despesa
-            App.state.gastos.push({ ...base, status: 'pago', recorrente: false });
+            App.state.gastos.push(App.utils.upperObj({ ...base, status: 'pago', recorrente: false }));
+
           }
           importadas++;
         });
@@ -4580,7 +4624,7 @@ ${el.innerHTML}
               const idx = App.state.orcamentos.findIndex(x => String(x.id)===String(idH));
               if (idx > -1) App.state.orcamentos[idx] = { ...App.state.orcamentos[idx], ...orc };
             } else {
-              App.state.orcamentos.push(orc);
+              App.state.orcamentos.push(App.utils.upperObj(orc));
             }
           }
           this.fecharModal();
@@ -5995,9 +6039,9 @@ ${osRows ? `
           os.id = String(saved.id);
           if (idH) {
             const i = App.state.osLista.findIndex(x => String(x.id) === String(idH));
-            if (i > -1) { App.state.osLista[i] = os; App.os._renderHistoricoAtualizacoes(os.atualizacoes||[]); }
+            if (i > -1) { App.state.osLista[i] = App.utils.upperObj(os); App.os._renderHistoricoAtualizacoes(os.atualizacoes||[]); }
           } else {
-            App.state.osLista.push(os);
+            App.state.osLista.push(App.utils.upperObj(os));
           }
           App.state.tempPecasOS    = [];
           App.state.tempServicosOS = [];
@@ -6871,10 +6915,11 @@ ${tl.length?`<!-- Timeline -->
               descricao: `OS #${os.numero||os.id}`, valor: Number(os.total||0),
               data: new Date().toISOString().slice(0,10),
               status: 'pendente', origem: 'OS',
-              formaPagamento: os.formaPagamento || 'Pix', nf_emitida: false
+              formaPagamento: os.formaPagamento || 'Pix', nf_emitida: false,
+              contaId: os.contaId || null
             };
             const savedR = await DB.salvarReceita(novaRec);
-            if (savedR) { novaRec.id = String(savedR.id); App.state.recebimentos.push(novaRec); }
+            if (savedR) { novaRec.id = String(savedR.id); App.state.recebimentos.push(App.utils.upperObj(novaRec)); }
           }
 
           os.status = status;
@@ -7109,7 +7154,7 @@ ${tl.length?`<!-- Timeline -->
 
             const savedVenda = await DB.salvarReceita(venda);
             if (savedVenda) venda.id = String(savedVenda.id);
-            App.state.recebimentos.push(venda);
+            App.state.recebimentos.push(App.utils.upperObj(venda));
             App.contas.renderizar();
 
             App.state.carrinhoPDV = [];
@@ -7251,7 +7296,7 @@ ${tl.length?`<!-- Timeline -->
             } else {
               rec = { ...base };
               const saved = await DB.salvarReceita(rec);
-              if (saved) { rec.id = String(saved.id); App.state.recebimentos.push(rec); }
+              if (saved) { rec.id = String(saved.id); App.state.recebimentos.push(App.utils.upperObj(rec)); }
             }
             this.fecharModalReceita();
             this.renderizar();
@@ -7367,7 +7412,7 @@ ${tl.length?`<!-- Timeline -->
               const saved = await DB.salvarDespesa(gasto);
               if (saved) {
                 gasto.id = String(saved.id);
-                App.state.gastos.push(gasto);
+                App.state.gastos.push(App.utils.upperObj(gasto));
                 if (recorr && (base.recorrenteParcelas||0) > 1) this._criarParcelas(gasto);
               }
             }
@@ -7390,7 +7435,7 @@ ${tl.length?`<!-- Timeline -->
           for (let i = 1; i < orig.recorrenteParcelas; i++) {
             const d = new Date(orig.data);
             d.setMonth(d.getMonth() + step * i);
-            App.state.gastos.push({
+            App.state.gastos.push(App.utils.upperObj({
               id:                  String(Date.now() + i),
               descricao:           `${orig.descricao} (Parcela ${i+1}/${orig.recorrenteParcelas})`,
               valor:               orig.valor,
@@ -7403,7 +7448,7 @@ ${tl.length?`<!-- Timeline -->
               recorrenteParcelas:  orig.recorrenteParcelas,
               recorrenteParcela:   i + 1,
               recorrenteId:        orig.recorrenteId
-            });
+            }));
           }
         },
 
@@ -7455,7 +7500,7 @@ ${tl.length?`<!-- Timeline -->
               const limiteAtingido = maxP > 0 && contador > maxP;
 
               if (!jaExiste && !limiteAtingido) {
-                App.state.gastos.push({
+                App.state.gastos.push(App.utils.upperObj({
                   id:                  String(Date.now() + Math.random() * 1000 | 0),
                   descricao:           maxP > 0
                                          ? `${orig.descricao.replace(/ \(Parcela \d+\/\d+\)$/,'')} (Parcela ${contador}/${maxP})`
@@ -7472,7 +7517,7 @@ ${tl.length?`<!-- Timeline -->
                   recorrenteId:        rid,
                   contaId:             orig.contaId || null,
                   geradoAuto:          true
-                });
+                }));
                 gerados++;
               }
 
@@ -7519,7 +7564,7 @@ ${tl.length?`<!-- Timeline -->
 
               if (!jaExiste) {
                 const proxParcela = parcAtual + 1;
-                App.state.gastos.push({
+                App.state.gastos.push(App.utils.upperObj({
                   id:                  String(Date.now() + Math.random()),
                   descricao:           maxParcelas > 0
                                          ? `${g.descricao.replace(/ \(Parcela \d+\/\d+\)$/,'')} (Parcela ${proxParcela}/${maxParcelas})`
@@ -7532,7 +7577,7 @@ ${tl.length?`<!-- Timeline -->
                   recorrenteParcelas:  g.recorrenteParcelas,
                   recorrenteParcela:   proxParcela,
                   recorrenteId:        g.recorrenteId
-                });
+                }));
               }
             }
           }
@@ -7727,11 +7772,15 @@ ${tl.length?`<!-- Timeline -->
         this.renderizarTudo();
         App.financeiro.gerarRecorrentesAutomatico();
         // Re-renderiza dashboard e contas após carregar
-        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 500);
-        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 1000);
+        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 300);
+        setTimeout(() => { App.dashboard.atualizar(); App.contas.renderizar(); }, 800);
+        setTimeout(() => { App.dashboard.atualizar(); }, 1500);
 
-        // Eventos globais
-        document.getElementById('monthSelect').addEventListener('change', () => this.renderizarTudo());
+        // Eventos globais — registra só uma vez
+        if (!App._listenersRegistrados) {
+          document.getElementById('monthSelect').addEventListener('change', () => this.renderizarTudo());
+          App._listenersRegistrados = true;
+        }
 
         window.addEventListener('afterprint', () => {
           const pa = document.getElementById('print-area');
@@ -8013,6 +8062,7 @@ ${tl.length?`<!-- Timeline -->
         this.user = null;
         this._iniciado = false;
         this._carregando = false;
+        App._listenersRegistrados = false;
         this._mostrarTelaAuth();
         // Limpar estado
         App.state.produtos = []; App.state.servicos = []; App.state.osLista = [];
@@ -8053,7 +8103,8 @@ ${tl.length?`<!-- Timeline -->
         document.getElementById('usuarioEmail').textContent = user.email;
         const emailMobile = document.getElementById('usuarioEmailMobile');
         if (emailMobile) emailMobile.textContent = user.email;
-        document.getElementById('barraUsuario').classList.remove('hidden');
+        const bu = document.getElementById('barraUsuario');
+        if (bu) { bu.classList.remove('hidden'); bu.style.display = 'flex'; }
         this._mostrarERP();
         App.init();
       },
@@ -8063,7 +8114,8 @@ ${tl.length?`<!-- Timeline -->
         document.getElementById('app').style.display       = 'none';
         const sb = document.getElementById('sidebar');
         if (sb) sb.style.display = 'none';
-        document.getElementById('barraUsuario').classList.add('hidden');
+        const bu2 = document.getElementById('barraUsuario');
+        if (bu2) { bu2.classList.add('hidden'); bu2.style.display = 'none'; }
       },
 
       _mostrarERP() {
@@ -8201,7 +8253,7 @@ ${tl.length?`<!-- Timeline -->
           ];
           for (const cat of cats) {
             const saved = await this.salvarCategoria(cat);
-            if (saved) App.state.categorias.push({ ...saved, id: String(saved.id) });
+            if (saved) App.state.categorias.push(App.utils.upperObj({ ...saved, id: String(saved.id) }));
           }
         }
         if (perfil) {
