@@ -8115,18 +8115,29 @@ ${tl.length?`<!-- Timeline -->
 
         this._loading('Carregando seus dados...');
 
-        // Tenta carregar sem timeout — aguarda quanto for necessário
-        let carregouOk = false;
-        try {
-          await DB.carregarTudo();
-          carregouOk = true;
-        } catch(e) {
-          console.error('[Auth] Erro ao carregar dados:', e.message);
-        } finally {
-          this._carregando = false;
+        // Tenta carregar com timeout de 20s, com até 2 tentativas
+        const tentarCarregar = async (tentativa) => {
+          try {
+            await Promise.race([
+              DB.carregarTudo(),
+              new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
+            ]);
+            return true;
+          } catch(e) {
+            console.error(`[Auth] Tentativa ${tentativa} falhou:`, e.message);
+            return false;
+          }
+        };
+
+        let ok = await tentarCarregar(1);
+        if (!ok) {
+          this._loading('Reconectando...');
+          ok = await tentarCarregar(2);
         }
 
-        // Mostra o ERP com os dados (ou vazio se falhou)
+        this._carregando = false;
+
+        // Mostra o ERP independente do resultado
         this._loading(false);
         document.getElementById('usuarioEmail').textContent = user.email;
         const emailMobile = document.getElementById('usuarioEmailMobile');
@@ -8136,19 +8147,7 @@ ${tl.length?`<!-- Timeline -->
         this._mostrarERP();
         App.init();
         App._tentarAtualizarDashboard(0);
-
-        // Se falhou ao carregar, tenta novamente em background após 3s
-        if (!carregouOk) {
-          this._loading('Reconectando...');
-          setTimeout(async () => {
-            try {
-              await DB.carregarTudo();
-              App.init();
-              App._tentarAtualizarDashboard(0);
-            } catch(e2) { console.error('[Auth] Retry falhou:', e2.message); }
-            finally { this._loading(false); }
-          }, 3000);
-        }
+        if (!ok) App.ui.mostrarToast('⚠️ Alguns dados podem não ter carregado. Verifique sua conexão.', 'erro');
       },
 
       _mostrarTelaAuth() {
