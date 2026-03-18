@@ -144,10 +144,9 @@ idealtech-erp/
 
 ---
 
-## 👨‍💻 Desenvolvido por
+## 👨‍💻 Desenvolvido por Zenilson Lacerda
 
-**Zenilson Lacerda**
-IdealTech — Gestão e Tecnologia
+**IdealTech** — Gestão e Tecnologia
 
 🌐 [idealtech.srv.br](https://idealtech.srv.br) · 📧 idealtech.get@gmail.com
 
