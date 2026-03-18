@@ -11,6 +11,27 @@
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ── SIDEBAR ── */
+    .sidebar-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; font-size: 13px; font-weight: 600;
+      color: #94a3b8; border-radius: 6px; margin: 1px 8px;
+      transition: background 0.15s, color 0.15s; cursor: pointer;
+      background: transparent; border: none;
+    }
+    .sidebar-item:hover { background: #1e293b; color: #e2e8f0; }
+    .sidebar-item.ativo  { background: #1d4ed8; color: #fff; }
+
+    @media print {
+      #sidebar, #sidebarOverlay, .topbar-mobile { display: none !important; }
+      #app { display: block !important; }
+      .flex-1.flex.flex-col { display: block !important; }
+    }
+    input[type="text"]:not([id*="Senha"]):not([id*="senha"]):not([id*="Email"]):not([id*="email"]):not([id*="Xml"]):not([id*="xml"]):not([id*="busca"]):not([id*="Busca"]):not([id*="Ncm"]):not([id*="ncm"]):not([id*="Cfop"]):not([id*="cfop"]):not([id*="Ean"]):not([id*="ean"]):not([id*="Numeros"]):not([id*="numero"]):not([id*="Cod"]):not([placeholder*="pesquis"]),
+    textarea:not([id*="laudo"]):not([id*="Laudo"]):not([id*="relatorio"]) {
+      text-transform: uppercase;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background-color: #0f172a;
@@ -52,6 +73,59 @@
     }
     .tab-btn { transition: all 0.2s ease; }
     .tab-btn:hover { background-color: #1e293b; color: white !important; }
+
+    /* ── SIDEBAR ── */
+    #sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; width: 220px;
+      background: #0f172a; border-right: 1px solid #1e293b;
+      display: none; flex-direction: column; z-index: 100;
+      transition: transform 0.25s ease;
+      overflow-y: auto;
+    }
+    #sidebar-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 99;
+    }
+    #main-content {
+      margin-left: 220px; min-height: 100vh;
+      transition: margin-left 0.25s ease;
+    }
+    .nav-group-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: #475569;
+      padding: 12px 16px 4px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px; font-size: 13px; font-weight: 500;
+      color: #94a3b8; cursor: pointer; border: none;
+      background: transparent; width: 100%; text-align: left;
+      transition: all 0.15s ease; border-left: 3px solid transparent;
+    }
+    .nav-item:hover { background: #1e293b; color: #e2e8f0; }
+    .nav-item.ativo {
+      background: #1e3a5f; color: #60a5fa;
+      border-left-color: #3b82f6; font-weight: 700;
+    }
+    .nav-item .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .nav-divider { border-top: 1px solid #1e293b; margin: 6px 0; }
+    #btn-menu-mobile {
+      display: none; position: fixed; top: 12px; left: 12px;
+      z-index: 101; background: #1e293b; border: 1px solid #334155;
+      color: white; border-radius: 8px; padding: 8px 12px;
+      font-size: 18px; cursor: pointer; line-height: 1;
+    }
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.aberto { transform: translateX(0); }
+      #sidebar-overlay.aberto { display: block; }
+      #main-content { margin-left: 0; }
+      #btn-menu-mobile { display: block; }
+    }
+    @media print {
+      #sidebar, #sidebar-overlay, #btn-menu-mobile { display: none !important; }
+      #main-content { margin-left: 0 !important; }
+    }
 
     .card-item { animation: fadeInUp 0.3s ease-out; transition: all 0.2s ease; }
     .card-item:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); }
@@ -371,9 +445,8 @@
     <div class="w-full max-w-md">
       <!-- Logo / título -->
       <div class="text-center mb-8">
-        <div class="text-5xl mb-3">⚡</div>
-        <h1 class="text-3xl font-black text-white">IdealTech ERP</h1>
-        <p class="text-slate-400 mt-1 text-sm">Sistema de Gestão para MEI</p>
+        <h1 class="text-3xl font-black text-white">IDEAL ERP</h1>
+        <p class="text-slate-400 mt-1 text-sm">by Zenilson Araújo de Sousa Lacerda - IdealTech — Gestão Completa para MEI</p>
       </div>
 
       <!-- Card -->
@@ -430,56 +503,94 @@
     <button onclick="Auth.sair()" class="text-slate-500 hover:text-red-400 transition font-bold">Sair</button>
   </div>
 
-  <div id="app" class="p-4 md:p-6 max-w-7xl mx-auto" style="display:none">
+  <!-- Botão mobile -->
+  <button id="btn-menu-mobile" onclick="App.aba.toggleSidebar()">☰</button>
+
+  <!-- Overlay mobile -->
+  <div id="sidebar-overlay" onclick="App.aba.fecharSidebar()"></div>
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <!-- Logo -->
+    <div style="padding:20px 16px 12px;border-bottom:1px solid #1e293b">
+      <div style="font-size:16px;font-weight:900;color:white;letter-spacing:-0.3px">
+        IDEAL ERP <span style="font-size:9px;background:#eab308;color:#000;padding:2px 6px;border-radius:4px;font-weight:700">MEI PRO</span>
+      </div>
+      <div style="font-size:9px;color:#475569;margin-top:3px;line-height:1.3">by Zenilson Araújo de Sousa Lacerda<br>IdealTech — Gestão Completa para MEI</div>
+    </div>
+
+    <!-- Mês Contábil -->
+    <div style="padding:10px 12px;border-bottom:1px solid #1e293b">
+      <div style="font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Mês Contábil</div>
+      <div style="display:flex;gap:4px">
+        <select id="yearSelect" class="bg-slate-700 text-white font-bold rounded px-1 py-1 outline-none border border-slate-600 cursor-pointer text-xs flex-1"></select>
+        <select id="monthSelect" class="bg-slate-700 text-white font-bold rounded px-1 py-1 outline-none border border-slate-600 cursor-pointer text-xs flex-1">
+          <option value="0">Jan</option><option value="1">Fev</option><option value="2">Mar</option>
+          <option value="3">Abr</option><option value="4">Mai</option><option value="5">Jun</option>
+          <option value="6">Jul</option><option value="7">Ago</option><option value="8">Set</option>
+          <option value="9">Out</option><option value="10">Nov</option><option value="11">Dez</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <div style="flex:1;padding:8px 0">
+      <div class="nav-group-label">Principal</div>
+      <button onclick="App.aba.trocar('dashboard')" id="btn-dashboard" class="nav-item ativo">
+        <span class="nav-icon">📊</span> Dashboard
+      </button>
+
+      <div class="nav-divider"></div>
+      <div class="nav-group-label">Trabalho</div>
+      <button onclick="App.aba.trocar('os')" id="btn-os" class="nav-item">
+        <span class="nav-icon">🛠️</span> Ordens de Serviço
+      </button>
+      <button onclick="App.aba.trocar('orcamentos')" id="btn-orcamentos" class="nav-item">
+        <span class="nav-icon">📋</span> Orçamentos
+      </button>
+      <button onclick="App.aba.trocar('pdv')" id="btn-pdv" class="nav-item">
+        <span class="nav-icon">🛒</span> PDV
+      </button>
+      <button onclick="App.aba.trocar('estoque')" id="btn-estoque" class="nav-item">
+        <span class="nav-icon">📦</span> Estoque
+      </button>
+      <button onclick="App.aba.trocar('servicos')" id="btn-servicos" class="nav-item">
+        <span class="nav-icon">⚙️</span> Serviços
+      </button>
+
+      <div class="nav-divider"></div>
+      <div class="nav-group-label">Financeiro</div>
+      <button onclick="App.aba.trocar('financeiro')" id="btn-financeiro" class="nav-item">
+        <span class="nav-icon">💰</span> Financeiro
+      </button>
+      <button onclick="App.aba.trocar('fluxo')" id="btn-fluxo" class="nav-item">
+        <span class="nav-icon">📅</span> Fluxo de Caixa
+      </button>
+      <button onclick="App.aba.trocar('dre')" id="btn-dre" class="nav-item">
+        <span class="nav-icon">📑</span> DRE
+      </button>
+      <button onclick="App.aba.trocar('relatorios')" id="btn-relatorios" class="nav-item">
+        <span class="nav-icon">📈</span> Relatórios
+      </button>
+
+      <div class="nav-divider"></div>
+      <div class="nav-group-label">Cadastros</div>
+      <button onclick="App.aba.trocar('clientes')" id="btn-clientes" class="nav-item">
+        <span class="nav-icon">👥</span> Clientes
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:12px 16px;border-top:1px solid #1e293b;display:flex;gap:8px">
+      <button onclick="App.configuracao.abrirModalBackup()" style="flex:1;background:#1e3a5f;border:none;color:#60a5fa;border-radius:6px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer">💾 Backup</button>
+      <button onclick="App.configuracao.abrirModal()" style="flex:1;background:#2d1b69;border:none;color:#a78bfa;border-radius:6px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer">⚙️ Config</button>
+    </div>
+  </nav>
+
+  <div id="app" style="display:none">
+  <div id="main-content" class="p-4 md:p-6">
     <!-- Toasts -->
     <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
-
-    <!-- Header -->
-    <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700 pb-4">
-      <div>
-        <h1 class="text-3xl font-bold text-white flex items-center gap-2">
-          ⚡ IDEAL ERP <span class="text-xs bg-yellow-500 text-black px-2 py-1 rounded font-bold">MEI PRO</span>
-        </h1>
-        <p class="text-slate-400 text-sm mt-1">by IdealTech — Gestão Completa para MEI</p>
-      </div>
-      <div class="flex items-center gap-4">
-        <button onclick="App.configuracao.abrirModalBackup()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-bold shadow transition">💾 Backup</button>
-        <button onclick="App.configuracao.abrirModal()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-lg text-sm font-bold shadow transition">⚙️ Config</button>
-        <div class="bg-slate-800 border border-slate-600 rounded-lg p-2 flex items-center gap-2">
-          <span class="text-sm text-slate-400">Mês Contábil:</span>
-          <select id="yearSelect" class="bg-slate-700 text-white font-bold rounded px-2 py-1 outline-none border border-slate-500 cursor-pointer"></select>
-          <select id="monthSelect" class="bg-slate-700 text-white font-bold rounded px-2 py-1 outline-none border border-slate-500 cursor-pointer">
-            <option value="0">Janeiro</option>
-            <option value="1">Fevereiro</option>
-            <option value="2">Março</option>
-            <option value="3">Abril</option>
-            <option value="4">Maio</option>
-            <option value="5">Junho</option>
-            <option value="6">Julho</option>
-            <option value="7">Agosto</option>
-            <option value="8">Setembro</option>
-            <option value="9">Outubro</option>
-            <option value="10">Novembro</option>
-            <option value="11">Dezembro</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="flex gap-2 mb-6 border-b border-slate-700 overflow-x-auto pb-2 scroll-personalizado">
-      <button onclick="App.aba.trocar('dashboard')" id="btn-dashboard" class="tab-btn tab-ativo font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition">📊 Dashboard</button>
-      <button onclick="App.aba.trocar('os')"         id="btn-os"        class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">🛠️ Ordens de Serviço</button>
-      <button onclick="App.aba.trocar('orcamentos')"   id="btn-orcamentos" class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">📋 Orçamentos</button>
-      <button onclick="App.aba.trocar('pdv')"        id="btn-pdv"       class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">🛒 PDV</button>
-      <button onclick="App.aba.trocar('estoque')"    id="btn-estoque"   class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">📦 Estoque</button>
-      <button onclick="App.aba.trocar('servicos')"   id="btn-servicos"  class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">⚙️ Serviços</button>
-      <button onclick="App.aba.trocar('financeiro')" id="btn-financeiro" class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">💰 Financeiro</button>
-      <button onclick="App.aba.trocar('fluxo')"      id="btn-fluxo"      class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">📅 Fluxo de Caixa</button>
-      <button onclick="App.aba.trocar('dre')"        id="btn-dre"        class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">📑 DRE</button>
-      <button onclick="App.aba.trocar('relatorios')" id="btn-relatorios" class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">📈 Relatórios</button>
-      <button onclick="App.aba.trocar('clientes')"   id="btn-clientes"  class="tab-btn font-semibold px-4 py-2 rounded hover:bg-slate-800 whitespace-nowrap transition text-slate-400">👥 Clientes</button>
-    </div>
 
     <!-- DASHBOARD -->
     <div id="aba-dashboard" class="aba-conteudo">
@@ -907,7 +1018,10 @@
         <div id="listaClientes" class="space-y-3 max-h-[600px] overflow-y-auto scroll-personalizado pr-2"></div>
       </div>
     </div>
-  </div><!-- /app -->
+      </div><!-- /conteudo abas -->
+    </div><!-- /conteudo principal -->
+  </div><!-- fim main-content -->
+  </div><!-- fim app -->
 
   <!-- ═══════════════════ MODAIS ═══════════════════ -->
 
@@ -2727,15 +2841,21 @@
       // ABAS
       // -----------------------------------------------------------------------
       aba: {
+        abrirSidebar() {
+          document.getElementById('sidebar').classList.remove('-translate-x-full');
+          document.getElementById('sidebarOverlay').classList.remove('hidden');
+        },
+        fecharSidebar() {
+          document.getElementById('sidebar').classList.add('-translate-x-full');
+          document.getElementById('sidebarOverlay').classList.add('hidden');
+        },
         trocar(id) {
           document.querySelectorAll('.aba-conteudo').forEach(el => el.classList.add('hidden'));
           document.getElementById('aba-' + id).classList.remove('hidden');
-          document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.remove('tab-ativo','text-white');
-            b.classList.add('text-slate-400');
-          });
+          document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('ativo'));
           const btn = document.getElementById('btn-' + id);
-          if (btn) { btn.classList.add('tab-ativo','text-white'); btn.classList.remove('text-slate-400'); }
+          if (btn) btn.classList.add('ativo');
+          this.fecharSidebar();
 
           if (id === 'dashboard')  App.dashboard.atualizar();
           if (id === 'estoque')    App.estoque.renderizar();
@@ -5280,8 +5400,8 @@ ${osRows ? `
           const campo2Label = {manutencao:'LAUDO',dev:'ENTREGÁVEIS',admin:'RESULTADO',eletrica:'SOLUÇÃO',outro:'OBS'};
 
           return `<div class="print-termica" style="max-width:300px;margin:0 auto;font-family:'Courier New',monospace;color:#000;padding:8px;font-size:11px">
-            ${cfg.logo ? `<img src="${cfg.logo}" style="max-width:100px;display:block;margin:0 auto 6px">` : ''}
             ${centroBold(esc(cfg.nome||'Assistência Técnica'), '14px')}
+            ${cfg.endereco ? `<div style="text-align:center;font-size:10px">${esc(cfg.endereco)}</div>` : ''}
             ${cfg.telefone ? `<div style="text-align:center;font-size:10px">${esc(cfg.telefone)}</div>` : ''}
             ${cfg.cnpj     ? `<div style="text-align:center;font-size:10px">CNPJ: ${esc(cfg.cnpj)}</div>` : ''}
             ${linha}
@@ -5348,8 +5468,8 @@ ${osRows ? `
           ].join('');
 
           return `<div class="print-termica" style="max-width:300px;margin:0 auto;font-family:'Courier New',monospace;color:#000;padding:8px;font-size:11px">
-            ${cfg.logo ? `<img src="${cfg.logo}" style="max-width:100px;display:block;margin:0 auto 6px">` : ''}
             ${centroBold(esc(cfg.nome||'Assistência Técnica'), '14px')}
+            ${cfg.endereco ? `<div style="text-align:center;font-size:10px">${esc(cfg.endereco)}</div>` : ''}
             ${cfg.telefone ? `<div style="text-align:center;font-size:10px">${esc(cfg.telefone)}</div>` : ''}
             ${cfg.cnpj     ? `<div style="text-align:center;font-size:10px">CNPJ: ${esc(cfg.cnpj)}</div>` : ''}
             ${linha}
@@ -7931,6 +8051,8 @@ ${tl.length?`<!-- Timeline -->
         // Dados prontos (ou timeout) — mostra o ERP
         this._loading(false);
         document.getElementById('usuarioEmail').textContent = user.email;
+        const emailMobile = document.getElementById('usuarioEmailMobile');
+        if (emailMobile) emailMobile.textContent = user.email;
         document.getElementById('barraUsuario').classList.remove('hidden');
         this._mostrarERP();
         App.init();
@@ -7939,13 +8061,30 @@ ${tl.length?`<!-- Timeline -->
       _mostrarTelaAuth() {
         document.getElementById('telaAuth').style.display  = 'flex';
         document.getElementById('app').style.display       = 'none';
+        const sb = document.getElementById('sidebar');
+        if (sb) sb.style.display = 'none';
         document.getElementById('barraUsuario').classList.add('hidden');
       },
 
       _mostrarERP() {
         document.getElementById('telaAuth').style.display = 'none';
         document.getElementById('app').style.display      = 'block';
+        const sb = document.getElementById('sidebar');
+        if (sb) sb.style.display = 'flex';
       },
+
+      toggleSidebar() {
+          const sb = document.getElementById('sidebar');
+          const ov = document.getElementById('sidebar-overlay');
+          sb.classList.toggle('aberto');
+          ov.classList.toggle('aberto');
+        },
+        fecharSidebar() {
+          if (window.innerWidth <= 768) {
+            document.getElementById('sidebar')?.classList.remove('aberto');
+            document.getElementById('sidebar-overlay')?.classList.remove('aberto');
+          }
+        },
 
       mostrarAba(aba) {
         document.getElementById('formLogin').classList.toggle('hidden',    aba !== 'login');
