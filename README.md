@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ IDEAL ERP MEI PRO
+#IDEAL ERP MEI PRO
 
 **Sistema de Gestão Completo para Microempreendedor Individual**
 
