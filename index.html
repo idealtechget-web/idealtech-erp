@@ -7804,6 +7804,12 @@ ${tl.length?`<!-- Timeline -->
         App.ui.bindMoneyInputs();
         if (!App._backupInterval)
           App._backupInterval = setInterval(App.utils.backupAutomatico, 300000);
+
+        // Keep-alive: ping leve no Supabase a cada 4 min para evitar cold start
+        if (!App._keepAliveInterval)
+          App._keepAliveInterval = setInterval(async () => {
+            try { await supa.from('perfis').select('id').limit(1); } catch(e) {}
+          }, 240000);
       },
 
       // -----------------------------------------------------------------------
@@ -8107,6 +8113,7 @@ ${tl.length?`<!-- Timeline -->
         this._iniciado = false;
         this._carregando = false;
         App._listenersRegistrados = false;
+        if (App._keepAliveInterval) { clearInterval(App._keepAliveInterval); App._keepAliveInterval = null; }
         this._mostrarTelaAuth();
         // Limpar estado
         App.state.produtos = []; App.state.servicos = []; App.state.osLista = [];
@@ -8279,7 +8286,7 @@ ${tl.length?`<!-- Timeline -->
               : supa.from(tabela).select('*').eq(coluna, uid);
             const { data, error } = await Promise.race([
               query,
-              new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout:${tabela}`)), 15000))
+              new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout:${tabela}`)), 25000))
             ]);
             if (error) { console.warn(`[DB] ${tabela} erro:`, error.message); return null; }
             console.log(`[DB] ${tabela} ok — ${Array.isArray(data)?data.length:1} registro(s)`);
