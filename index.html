@@ -1805,7 +1805,7 @@
               <input type="text" id="clienteCrt" placeholder="CRT (Regime Tributário)" class="px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <input type="text" id="clienteCep"        placeholder="CEP"        class="px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
+              <input type="text" id="clienteCep" placeholder="CEP" maxlength="9" class="px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none" oninput="maskInput(this,'cep')" onblur="buscarCepPJ()">
               <input type="text" id="clienteLogradouro" placeholder="Logradouro" class="px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
             </div>
             <div class="grid grid-cols-4 gap-2">
@@ -1989,21 +1989,47 @@
       if (lb && img) { img.src = src; lb.classList.add('open'); }
     };
 
-    async function buscarCepPF() {
-      const cep = document.getElementById('clienteCepPF')?.value.replace(/\D/g,'');
+    async function buscarCepViaCEP(cep, campos) {
+      // campos = { logradouro, bairro, cidade, uf }
+      const el = (id) => document.getElementById(id);
       if (!cep || cep.length < 8) return;
+      // Feedback visual
+      Object.values(campos).forEach(id => { if(el(id)) el(id).style.opacity='0.5'; });
       try {
         const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
         const d = await res.json();
-        if (d.erro) return;
+        if (d.erro) { App.ui.mostrarToast('CEP não encontrado.','erro'); return; }
         const s = (v) => (v||'').toUpperCase();
-        document.getElementById('clienteLogradouroPF').value = s(d.logradouro);
-        document.getElementById('clienteBairroPF').value     = s(d.bairro);
-        document.getElementById('clienteCidadePF').value     = s(d.localidade);
-        document.getElementById('clienteUfPF').value         = s(d.uf);
-      } catch(e) {}
+        if(el(campos.logradouro)) el(campos.logradouro).value = s(d.logradouro);
+        if(el(campos.bairro))     el(campos.bairro).value     = s(d.bairro);
+        if(el(campos.cidade))     el(campos.cidade).value     = s(d.localidade);
+        if(el(campos.uf))         el(campos.uf).value         = s(d.uf);
+        App.ui.mostrarToast('Endereço preenchido!','sucesso');
+      } catch(e) {
+        App.ui.mostrarToast('Erro ao buscar CEP.','erro');
+      } finally {
+        Object.values(campos).forEach(id => { if(el(id)) el(id).style.opacity='1'; });
+      }
     }
+
+    async function buscarCepPF() {
+      const cep = document.getElementById('clienteCepPF')?.value.replace(/\D/g,'');
+      await buscarCepViaCEP(cep, {
+        logradouro: 'clienteLogradouroPF', bairro: 'clienteBairroPF',
+        cidade: 'clienteCidadePF', uf: 'clienteUfPF'
+      });
+    }
+
+    async function buscarCepPJ() {
+      const cep = document.getElementById('clienteCep')?.value.replace(/\D/g,'');
+      await buscarCepViaCEP(cep, {
+        logradouro: 'clienteLogradouro', bairro: 'clienteBairro',
+        cidade: 'clienteCidade', uf: 'clienteUf'
+      });
+    }
+
     window.buscarCepPF = buscarCepPF;
+    window.buscarCepPJ = buscarCepPJ;
 
     // Garante que o valor salvo no state seja sempre em maiúsculas para campos de texto
     function toUpperFields(obj) {
