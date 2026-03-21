@@ -4295,14 +4295,16 @@ ${el.innerHTML}
           const isXML = texto.trimStart().startsWith('<?xml') || texto.includes('<OFX>');
 
           let raw = texto;
-          if (!isXML) {
-            // OFX 1.x (SGML) — pega a partir do <OFX>
-            const idx = texto.indexOf('<OFX>');
-            if (idx === -1) throw new Error('Formato OFX inválido — tag <OFX> não encontrada');
-            raw = texto.slice(idx);
-            // Auto-fecha tags sem fechamento (padrão SGML)
-            raw = raw.replace(/<([A-Z0-9.]+)>([^<\n]+)/g, (m, tag, val) => `<${tag}>${val.trim()}</${tag}>`);
-          }
+          // OFX 1.x (SGML) — pega a partir do <OFX>
+          const idx = texto.indexOf('<OFX>');
+          if (idx === -1) throw new Error('Formato OFX inválido — tag <OFX> não encontrada');
+          raw = texto.slice(idx);
+          // Auto-fecha APENAS tags SGML sem fechamento (evita duplicar as que já têm)
+          raw = raw.split('\n').map(linha => {
+            const m = linha.match(/^(\s*)<([A-Z0-9.]+)>([^<\n]+)$/);
+            if (m) return `${m[1]}<${m[2]}>${m[3].trim()}</${m[2]}>`;
+            return linha;
+          }).join('\n');
 
           const get = (src, tag) => {
             const m = src.match(new RegExp(`<${tag}>([\s\S]*?)</${tag}>`, 'i'));
