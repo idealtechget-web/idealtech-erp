@@ -3581,7 +3581,21 @@ Importar como Receita no Financeiro?`)) return;
           }
         },
 
-        fecharModal() { document.getElementById('modalCliente').classList.add('hidden'); },
+        fecharModal() {
+          document.getElementById('modalCliente').classList.add('hidden');
+          // Limpa todos os campos ao fechar
+          document.getElementById('clienteId').value        = '';
+          document.getElementById('clienteNome').value      = '';
+          document.getElementById('clienteTelefone').value  = '';
+          document.getElementById('clienteObs').value       = '';
+          document.getElementById('clienteTipoPJ').checked  = false;
+          document.getElementById('clientePJFields').classList.add('hidden');
+          this._clearPJFields();
+          // Limpa campos PF opcionais
+          ['clienteCpf','clienteCepPF','clienteLogradouroPF','clienteNumeroPF',
+           'clienteComplementoPF','clienteBairroPF','clienteCidadePF','clienteUfPF'
+          ].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+        },
 
         // FIX PRINCIPAL: removida redeclaração com const/let dentro do if
         async salvar() {
@@ -8146,7 +8160,9 @@ ${tl.length?`<!-- Timeline -->
         if (bu) { bu.classList.remove('hidden'); bu.style.display = 'flex'; }
         this._mostrarERP();
         App.init();
-        App._tentarAtualizarDashboard(0);
+        // Aguarda o browser renderizar o layout antes de tentar os gráficos
+        // No F5/INITIAL_SESSION o DOM precisa de mais tempo para estar pronto
+        setTimeout(() => App._tentarAtualizarDashboard(0), 100);
         if (!ok) App.ui.mostrarToast('⚠️ Alguns dados podem não ter carregado. Verifique sua conexão.', 'erro');
       },
 
