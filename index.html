@@ -242,14 +242,18 @@
 
     /* Todos os campos de texto digitaveis em maiusculas */
     input[type="text"]:not(.no-uppercase),
-    input[type="email"]:not(.no-uppercase),
     textarea:not(.no-uppercase) {
       text-transform: uppercase;
     }
     input[type="text"]::placeholder,
-    input[type="email"]::placeholder,
     textarea::placeholder {
       text-transform: none;
+    }
+    /* Campos de e-mail sempre minúsculo */
+    input[type="email"],
+    input[type="password"],
+    .no-uppercase {
+      text-transform: none !important;
     }
 
     /* Botao importar XML no modal produto */
@@ -1817,7 +1821,7 @@
               <input type="text" id="clienteCidade" placeholder="Município" class="px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none col-span-2">
               <input type="text" id="clienteUf"     placeholder="UF"        class="px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none" maxlength="2">
             </div>
-            <input type="email" id="clienteEmail" placeholder="E-mail" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
+            <input type="email" id="clienteEmail" placeholder="E-mail" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none no-uppercase">
           </div>
         </div>
 
@@ -4355,6 +4359,11 @@ ${el.innerHTML}
       },
 
       abrirImportOFX(contaId) {
+        // alias para manter compatibilidade com o botão OFX
+        return this._abrirImportOFX(contaId);
+      },
+
+      _abrirImportOFX(contaId) {
         this.ofx._contaId  = contaId;
         this.ofx._transacoes = [];
         const conta = App.state.contas.find(c => c.id === contaId);
