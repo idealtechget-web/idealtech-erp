@@ -8134,14 +8134,16 @@ ${tl.length?`<!-- Timeline -->
 
         this._loading('Carregando seus dados...');
 
-        // Carrega sem timeout — aguarda o Supabase responder
+        // Carrega com timeout global de 30s (cada query tem 15s individual)
         let carregouOk = false;
         try {
-          await DB.carregarTudo();
+          await Promise.race([
+            DB.carregarTudo(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout global')), 30000))
+          ]);
           carregouOk = true;
         } catch(e) {
           console.error('[Auth] Erro ao carregar:', e.message);
-          // Reseta _iniciado para permitir nova tentativa no próximo evento
           this._iniciado = false;
         }
 
@@ -8268,17 +8270,21 @@ ${tl.length?`<!-- Timeline -->
       async carregarTudo() {
         const uid = this.uid(); if (!uid) return;
 
-        // Busca segura — falha individual não quebra o resto
+        // Timeout por query individual — nunca trava em uma tabela
         const q = async (tabela, coluna='user_id') => {
           try {
             console.log(`[DB] buscando ${tabela}...`);
-            const { data, error } = coluna === 'id'
-              ? await supa.from(tabela).select('*').eq('id', uid).maybeSingle()
-              : await supa.from(tabela).select('*').eq(coluna, uid);
+            const query = coluna === 'id'
+              ? supa.from(tabela).select('*').eq('id', uid).maybeSingle()
+              : supa.from(tabela).select('*').eq(coluna, uid);
+            const { data, error } = await Promise.race([
+              query,
+              new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout:${tabela}`)), 15000))
+            ]);
             if (error) { console.warn(`[DB] ${tabela} erro:`, error.message); return null; }
             console.log(`[DB] ${tabela} ok — ${Array.isArray(data)?data.length:1} registro(s)`);
             return data;
-          } catch(e) { console.warn(`[DB] ${tabela} exception:`, e); return null; }
+          } catch(e) { console.warn(`[DB] ${tabela} falhou:`, e.message); return null; }
         };
 
         const [produtos, servicos, os, despesas, receitas,
