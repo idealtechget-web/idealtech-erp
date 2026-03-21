@@ -8120,50 +8120,60 @@ ${tl.length?`<!-- Timeline -->
       },
 
       async _onLogin(user) {
-        // Evita recarregar se já está logado com o mesmo usuário
         if (this._carregando) return;
-        if (this._iniciado && this.user?.id === user.id) return;
+        // Só ignora se já iniciado E os dados realmente carregaram
+        const dadosCarregados = App.state.recebimentos.length > 0 ||
+                                App.state.gastos.length > 0 ||
+                                App.state.osLista.length > 0 ||
+                                App.state.clientes.length > 0 ||
+                                App.state.categorias.length > 0;
+        if (this._iniciado && this.user?.id === user.id && dadosCarregados) return;
         this._carregando = true;
         this._iniciado = true;
         this.user = user;
 
         this._loading('Carregando seus dados...');
 
-        // Tenta carregar com timeout de 20s, com até 2 tentativas
-        const tentarCarregar = async (tentativa) => {
-          try {
-            await Promise.race([
-              DB.carregarTudo(),
-              new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
-            ]);
-            return true;
-          } catch(e) {
-            console.error(`[Auth] Tentativa ${tentativa} falhou:`, e.message);
-            return false;
-          }
-        };
-
-        let ok = await tentarCarregar(1);
-        if (!ok) {
-          this._loading('Reconectando...');
-          ok = await tentarCarregar(2);
+        // Carrega sem timeout — aguarda o Supabase responder
+        let carregouOk = false;
+        try {
+          await DB.carregarTudo();
+          carregouOk = true;
+        } catch(e) {
+          console.error('[Auth] Erro ao carregar:', e.message);
+          // Reseta _iniciado para permitir nova tentativa no próximo evento
+          this._iniciado = false;
         }
 
         this._carregando = false;
-
-        // Mostra o ERP independente do resultado
         this._loading(false);
+
+        // Mostra e-mail do usuário
         document.getElementById('usuarioEmail').textContent = user.email;
         const emailMobile = document.getElementById('usuarioEmailMobile');
         if (emailMobile) emailMobile.textContent = user.email;
         const bu = document.getElementById('barraUsuario');
         if (bu) { bu.classList.remove('hidden'); bu.style.display = 'flex'; }
+
+        // Abre o ERP e renderiza
         this._mostrarERP();
         App.init();
-        // Aguarda o browser renderizar o layout antes de tentar os gráficos
-        // No F5/INITIAL_SESSION o DOM precisa de mais tempo para estar pronto
-        setTimeout(() => App._tentarAtualizarDashboard(0), 100);
-        if (!ok) App.ui.mostrarToast('⚠️ Alguns dados podem não ter carregado. Verifique sua conexão.', 'erro');
+        setTimeout(() => App._tentarAtualizarDashboard(0), 150);
+
+        // Se falhou, tenta recarregar silenciosamente em background
+        if (!carregouOk) {
+          App.ui.mostrarToast('Conexão lenta — tentando novamente...', 'info');
+          setTimeout(async () => {
+            try {
+              await DB.carregarTudo();
+              App.renderizarTudo();
+              App._tentarAtualizarDashboard(0);
+              App.ui.mostrarToast('✅ Dados carregados!', 'sucesso');
+            } catch(e2) {
+              App.ui.mostrarToast('⚠️ Verifique sua conexão.', 'erro');
+            }
+          }, 2000);
+        }
       },
 
       _mostrarTelaAuth() {
