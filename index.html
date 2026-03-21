@@ -4278,12 +4278,11 @@ ${el.innerHTML}
             </div>`;
           }).join('');
         },
-      },
 
-      // ─────────────────────────────────────────────────────────────────
-      // OFX HELPERS (dentro de App.contas)
-      // ─────────────────────────────────────────────────────────────────
-      ofx: {
+        // ─────────────────────────────────────────────────────────────────
+        // OFX HELPERS
+        // ─────────────────────────────────────────────────────────────────
+        ofx: {
         _contaId: null,
         _transacoes: [],
 
@@ -4356,14 +4355,9 @@ ${el.innerHTML}
           const novos  = [...new Set([...salvos, ...fitids])];
           localStorage.setItem(chave, JSON.stringify(novos));
         },
-      },
+      }, // fim ofx
 
       abrirImportOFX(contaId) {
-        // alias para manter compatibilidade com o botão OFX
-        return this._abrirImportOFX(contaId);
-      },
-
-      _abrirImportOFX(contaId) {
         this.ofx._contaId  = contaId;
         this.ofx._transacoes = [];
         const conta = App.state.contas.find(c => c.id === contaId);
@@ -4511,6 +4505,8 @@ ${el.innerHTML}
         App.financeiro.renderizar();
         App.dashboard.atualizar();
         App.ui.mostrarToast(`${importadas} transações importadas com sucesso!`, 'sucesso');
+      },
+
       },
 
       // ─────────────────────────────────────────────────────────────────
