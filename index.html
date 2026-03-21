@@ -3588,8 +3588,10 @@ Importar como Receita no Financeiro?`)) return;
           document.getElementById('clienteNome').value      = '';
           document.getElementById('clienteTelefone').value  = '';
           document.getElementById('clienteObs').value       = '';
+          // Reseta toggle PJ — desmarca e restaura visibilidade correta
           document.getElementById('clienteTipoPJ').checked  = false;
           document.getElementById('clientePJFields').classList.add('hidden');
+          document.getElementById('clientePFFields').classList.remove('hidden'); // ← estava faltando!
           this._clearPJFields();
           // Limpa campos PF opcionais
           ['clienteCpf','clienteCepPF','clienteLogradouroPF','clienteNumeroPF',
