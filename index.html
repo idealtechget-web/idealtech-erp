@@ -1496,21 +1496,6 @@
         </div>
         <div class="bg-slate-900 p-3 rounded border border-slate-700">
           <label class="flex items-center gap-2 cursor-pointer mb-2">
-            <input type="checkbox" id="gastoRecorrente" onchange="App.financeiro.toggleRecorrente()" class="w-4 h-4 rounded text-purple-600">
-            <span class="text-sm text-slate-300">Despesa Recorrente?</span>
-          </label>
-          <div id="gastoRecorrenteCampos" class="hidden space-y-2 mt-2 border-t border-slate-700 pt-2">
-            <select id="gastoRecorrenteTipo" class="w-full px-2 py-1 text-sm rounded bg-slate-800 border border-slate-600 outline-none text-white">
-              <option value="mensal">Mensal</option>
-              <option value="trimestral">Trimestral</option>
-              <option value="semestral">Semestral</option>
-              <option value="anual">Anual</option>
-            </select>
-            <input type="number" id="gastoRecorrenteParcelas" placeholder="Nº de parcelas (0=indefinido)" min="0" class="w-full px-2 py-1 text-sm rounded bg-slate-800 border border-slate-600 outline-none text-white">
-          </div>
-        </div>
-        <div class="bg-slate-900 p-3 rounded border border-slate-700">
-          <label class="flex items-center gap-2 cursor-pointer mb-2">
             <input type="checkbox" id="gastoTemNF" onchange="App.ui.toggleNfCampos('gasto')" class="w-4 h-4 rounded text-blue-600">
             <span class="text-sm text-slate-300">Nota Fiscal Vinculada?</span>
           </label>
@@ -4267,7 +4252,6 @@ ${el.innerHTML}
                   <div class="text-white font-bold text-base mt-0.5">${App.utils.escapeHTML(c.nome||'Conta')}</div>
                 </div>
                 <div class="flex gap-1">
-                  <button onclick="App.contas.abrirImportOFX('${c.id}')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded transition" title="Importar extrato OFX">📄 OFX</button>
                   <button onclick="App.contas.abrirModal('${c.id}')" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition">✏️</button>
                   <button onclick="App.contas.excluir('${c.id}')" class="text-xs bg-red-900/50 hover:bg-red-700 text-red-300 px-2 py-1 rounded transition">🗑️</button>
                 </div>
@@ -4278,236 +4262,6 @@ ${el.innerHTML}
             </div>`;
           }).join('');
         },
-
-        // ─────────────────────────────────────────────────────────────────
-        // OFX HELPERS
-        // ─────────────────────────────────────────────────────────────────
-        ofx: {
-        _contaId: null,
-        _transacoes: [],
-
-        // ── Parseia OFX (SGML e XML) ──────────────────────────────────
-        parse(texto) {
-          // Normaliza quebras de linha
-          texto = texto.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-
-          // Tenta extrair como XML primeiro (OFX 2.x)
-          const isXML = texto.trimStart().startsWith('<?xml') || texto.includes('<OFX>');
-
-          let raw = texto;
-          // OFX 1.x (SGML) — pega a partir do <OFX>
-          const idx = texto.indexOf('<OFX>');
-          if (idx === -1) throw new Error('Formato OFX inválido — tag <OFX> não encontrada');
-          raw = texto.slice(idx);
-          // Auto-fecha APENAS tags SGML sem fechamento (evita duplicar as que já têm)
-          raw = raw.split('\n').map(linha => {
-            const m = linha.match(/^(\s*)<([A-Z0-9.]+)>([^<\n]+)$/);
-            if (m) return `${m[1]}<${m[2]}>${m[3].trim()}</${m[2]}>`;
-            return linha;
-          }).join('\n');
-
-          const get = (src, tag) => {
-            const m = src.match(new RegExp(`<${tag}>([\s\S]*?)</${tag}>`, 'i'));
-            return m ? m[1].trim() : '';
-          };
-          const getAll = (src, tag) => {
-            const re = new RegExp(`<${tag}>([\s\S]*?)</${tag}>`, 'gi');
-            const r = []; let m;
-            while ((m = re.exec(src)) !== null) r.push(m[1]);
-            return r;
-          };
-
-          // Datas: YYYYMMDD[HHMMSS] → Date
-          const parseData = str => {
-            if (!str) return null;
-            const s = str.replace(/\[.*\]/, '').trim();
-            const y=s.slice(0,4), mo=s.slice(4,6), d=s.slice(6,8);
-            return `${y}-${mo}-${d}`;
-          };
-
-          const stmtBlock = get(raw, 'STMTRS') || get(raw, 'CCSTMTRS');
-          if (!stmtBlock) throw new Error('Bloco STMTRS não encontrado no OFX');
-
-          const dtStart = parseData(get(raw, 'DTSTART'));
-          const dtEnd   = parseData(get(raw, 'DTEND'));
-
-          const txBlocks = getAll(stmtBlock, 'STMTTRN');
-          const transacoes = txBlocks.map(blk => ({
-            fitid:  get(blk, 'FITID'),
-            tipo:   get(blk, 'TRNTYPE'),   // CREDIT / DEBIT
-            data:   parseData(get(blk, 'DTPOSTED')),
-            valor:  Math.abs(parseFloat(get(blk, 'TRNAMT').replace(',','.')) || 0),
-            sinal:  parseFloat(get(blk, 'TRNAMT').replace(',','.')) || 0,
-            memo:   get(blk, 'MEMO') || get(blk, 'NAME') || 'Transação',
-          })).filter(t => t.fitid && t.data);
-
-          return { dtStart, dtEnd, transacoes };
-        },
-
-        // ── Verifica duplicata pelo FITID salvo ───────────────────────
-        isDuplicata(fitid, contaId) {
-          const chave = `ofx_fitid_${contaId}`;
-          const salvos = JSON.parse(localStorage.getItem(chave) || '[]');
-          return salvos.includes(fitid);
-        },
-
-        marcarImportados(fitids, contaId) {
-          const chave = `ofx_fitid_${contaId}`;
-          const salvos = JSON.parse(localStorage.getItem(chave) || '[]');
-          const novos  = [...new Set([...salvos, ...fitids])];
-          localStorage.setItem(chave, JSON.stringify(novos));
-        },
-      }, // fim ofx
-
-      abrirImportOFX(contaId) {
-        this.ofx._contaId  = contaId;
-        this.ofx._transacoes = [];
-        const conta = App.state.contas.find(c => c.id === contaId);
-        document.getElementById('ofxContaNome').textContent = conta ? `${conta.banco||''} — ${conta.nome||'Conta'}` : '';
-        document.getElementById('ofxUploadArea').classList.remove('hidden');
-        document.getElementById('ofxResumo').classList.add('hidden');
-        document.getElementById('ofxLista').classList.add('hidden');
-        document.getElementById('ofxRodape').classList.add('hidden');
-        document.getElementById('ofxFileInput').value = '';
-        document.getElementById('modalOFX').classList.remove('hidden');
-      },
-
-      fecharModalOFX() {
-        document.getElementById('modalOFX').classList.add('hidden');
-      },
-
-      lerArquivoOFX(input) {
-        if (!input.files.length) return;
-        const reader = new FileReader();
-        reader.onload = e => {
-          try {
-            const resultado = this.ofx.parse(e.target.result);
-            const contaId   = this.ofx._contaId;
-            let dupls = 0;
-
-            // Classifica: nova ou duplicata
-            this.ofx._transacoes = resultado.transacoes.map(t => {
-              const dupl = this.ofx.isDuplicata(t.fitid, contaId);
-              if (dupl) dupls++;
-              return { ...t, dupl, selecionada: !dupl };
-            });
-
-            const novas = this.ofx._transacoes.filter(t => !t.dupl);
-            const entradas = novas.filter(t => t.sinal > 0);
-            const saidas   = novas.filter(t => t.sinal < 0);
-
-            // Resumo
-            const fmtData = d => d ? d.split('-').reverse().join('/') : '?';
-            document.getElementById('ofxPeriodo').textContent  = `${fmtData(resultado.dtStart)} a ${fmtData(resultado.dtEnd)}`;
-            document.getElementById('ofxTotal').textContent    = novas.length;
-            document.getElementById('ofxEntradas').textContent = entradas.length;
-            document.getElementById('ofxSaidas').textContent   = saidas.length;
-            document.getElementById('ofxDupl').textContent     = dupls;
-            document.getElementById('ofxUploadArea').classList.add('hidden');
-            document.getElementById('ofxResumo').classList.remove('hidden');
-            document.getElementById('ofxLista').classList.remove('hidden');
-            document.getElementById('ofxRodape').classList.remove('hidden');
-
-            this._ofxRenderizarLista();
-          } catch(err) {
-            App.ui.mostrarToast('Erro ao ler OFX: ' + err.message, 'erro');
-          }
-        };
-        reader.readAsText(input.files[0], 'latin1');
-      },
-
-      _ofxRenderizarLista() {
-        const lista = document.getElementById('ofxLista');
-        const txs   = this.ofx._transacoes;
-        const fmt   = App.utils.formatarMoeda.bind(App.utils);
-
-        lista.innerHTML = txs.map((t, i) => {
-          const isEntrada = t.sinal > 0;
-          const cor = t.dupl ? 'opacity-40' : isEntrada ? 'border-green-700/40' : 'border-red-700/40';
-          const bg  = t.dupl ? 'bg-slate-900/30' : isEntrada ? 'bg-green-950/20' : 'bg-red-950/20';
-          const duplBadge = t.dupl ? '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-0.5 rounded font-bold ml-2">já importado</span>' : '';
-          const fmtData = d => d ? d.split('-').reverse().join('/') : '?';
-          return `<label class="flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer ${cor} ${bg} ${t.dupl?'cursor-not-allowed':'hover:bg-slate-700/20'} transition">
-            <input type="checkbox" data-idx="${i}" ${t.selecionada?'checked':''} ${t.dupl?'disabled':''} onchange="App.contas._ofxToggle(${i}, this.checked)" class="w-4 h-4 accent-indigo-500">
-            <span class="text-lg">${isEntrada ? '▲' : '▼'}</span>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm font-semibold text-white truncate">${App.utils.escapeHTML(t.memo)}${duplBadge}</div>
-              <div class="text-xs text-slate-400 mt-0.5">${fmtData(t.data)}</div>
-            </div>
-            <div class="text-base font-bold ${isEntrada?'text-green-400':'text-red-400'} whitespace-nowrap">
-              ${isEntrada?'+':'-'} R$ ${fmt(t.valor)}
-            </div>
-          </label>`;
-        }).join('');
-
-        this._ofxAtualizarContagem();
-      },
-
-      _ofxToggle(idx, checked) {
-        this.ofx._transacoes[idx].selecionada = checked;
-        this._ofxAtualizarContagem();
-      },
-
-      _ofxAtualizarContagem() {
-        const n = this.ofx._transacoes.filter(t => t.selecionada && !t.dupl).length;
-        document.getElementById('ofxSelecionadas').textContent = n;
-      },
-
-      ofxSelecionarTodas() {
-        this.ofx._transacoes.forEach((t,i) => { if (!t.dupl) t.selecionada = true; });
-        this._ofxRenderizarLista();
-      },
-
-      ofxDesmarcarTodas() {
-        this.ofx._transacoes.forEach(t => { if (!t.dupl) t.selecionada = false; });
-        this._ofxRenderizarLista();
-      },
-
-      async ofxImportar() {
-        const contaId = this.ofx._contaId;
-        const selecionadas = this.ofx._transacoes.filter(t => t.selecionada && !t.dupl);
-        if (!selecionadas.length) { App.ui.mostrarToast('Nenhuma transação selecionada', 'erro'); return; }
-
-        let importadas = 0;
-        selecionadas.forEach(t => {
-          const base = {
-            id:          String(Date.now() + importadas),
-            descricao:   t.memo,
-            valor:       t.valor,
-            data:        t.data,
-            contaId:     contaId,
-            categoriaId: null,
-            obs:         `Importado via OFX — ID: ${t.fitid}`,
-            nf_emitida:  false,
-          };
-          if (t.sinal > 0) {
-            // Crédito → Receita
-            App.state.recebimentos.push(App.utils.upperObj({ ...base, cliente: '', status: 'recebido', formaPagamento: 'Transferência' }));
-
-          } else {
-            // Débito → Despesa
-            App.state.gastos.push(App.utils.upperObj({ ...base, status: 'pago', recorrente: false }));
-
-          }
-          importadas++;
-        });
-
-        // Salva dados e marca FITIDs como importados
-        const novosItens = selecionadas.length;
-        const recNovas = App.state.recebimentos.slice(-novosItens).filter(r => !r.id || String(r.id).length < 10);
-        const gasNovas = App.state.gastos.slice(-novosItens).filter(g => !g.id || String(g.id).length < 10);
-        await Promise.all([
-          ...recNovas.map(r => DB.salvarReceita(r).then(s => { if(s) r.id=String(s.id); })),
-          ...gasNovas.map(g => DB.salvarDespesa(g).then(s => { if(s) g.id=String(s.id); })),
-        ]);
-        await DB.salvarOFXFitid(contaId, selecionadas.map(t => t.fitid));
-
-        this.fecharModalOFX();
-        App.contas.renderizar();
-        App.financeiro.renderizar();
-        App.dashboard.atualizar();
-        App.ui.mostrarToast(`${importadas} transações importadas com sucesso!`, 'sucesso');
-      },
 
       },
 
@@ -7296,11 +7050,6 @@ ${tl.length?`<!-- Timeline -->
       // FINANCEIRO
       // -----------------------------------------------------------------------
       financeiro: {
-        toggleRecorrente() {
-          const chk = document.getElementById('gastoRecorrente').checked;
-          document.getElementById('gastoRecorrenteCampos').classList.toggle('hidden', !chk);
-        },
-
         clienteSelecionadoReceita(sel) {
           if (sel.value) {
             const c = App.state.clientes.find(c => String(c.id) === String(sel.value));
@@ -7428,7 +7177,6 @@ ${tl.length?`<!-- Timeline -->
           document.getElementById('modalGasto').classList.remove('hidden');
           document.getElementById('gastoXmlAtual').classList.add('hidden');
           document.getElementById('gastoXmlNF').value = '';
-          document.getElementById('gastoRecorrenteCampos').classList.add('hidden');
 
           if (id) {
             const g = App.state.gastos.find(x => String(x.id) === String(id));
@@ -7438,16 +7186,10 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('gastoDesc').value            = g.descricao || '';
             document.getElementById('gastoValor').value           = money.formatBR(g.valor);
             document.getElementById('gastoData').value            = g.data || new Date().toISOString().slice(0,10);
-            document.getElementById('gastoRecorrente').checked    = !!g.recorrente;
             document.getElementById('gastoPago').checked          = g.status === 'pago';
             document.getElementById('gastoObs').value             = g.obs || '';
             document.getElementById('gastoContaId').value        = g.contaId || '';
             document.getElementById('gastoCategoriaId').value   = g.categoriaId || '';
-            if (g.recorrente) {
-              document.getElementById('gastoRecorrenteCampos').classList.remove('hidden');
-              document.getElementById('gastoRecorrenteTipo').value     = g.recorrenteTipo     || 'mensal';
-              document.getElementById('gastoRecorrenteParcelas').value = g.recorrenteParcelas || 0;
-            }
             document.getElementById('gastoTemNF').checked = !!g.nf_emitida;
             App.ui.toggleNfCampos('gasto');
             if (g.nf_emitida) {
@@ -7465,7 +7207,6 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('gastoDesc').value            = '';
             document.getElementById('gastoValor').value           = '';
             document.getElementById('gastoData').value            = new Date().toISOString().slice(0,10);
-            document.getElementById('gastoRecorrente').checked    = false;
             document.getElementById('gastoPago').checked          = false;
             document.getElementById('gastoObs').value              = '';
             document.getElementById('gastoContaId').value         = '';
@@ -7485,7 +7226,6 @@ ${tl.length?`<!-- Timeline -->
           const desc      = document.getElementById('gastoDesc').value.trim();
           const valor     = money.parseBR(document.getElementById('gastoValor').value);
           const data      = document.getElementById('gastoData').value;
-          const recorr    = document.getElementById('gastoRecorrente').checked;
           const pago      = document.getElementById('gastoPago').checked;
           const temNF     = document.getElementById('gastoTemNF').checked;
           const obs       = document.getElementById('gastoObs').value.trim();
@@ -7504,13 +7244,8 @@ ${tl.length?`<!-- Timeline -->
               nf_emitida: temNF,
               nf_tipo:    temNF ? (document.getElementById('gastoTipoNF')?.value||'NFe') : null,
               nf_numero:  temNF ? document.getElementById('gastoNumNF').value.trim() : null,
-              recorrente: recorr
+              recorrente: false
             };
-            if (recorr) {
-              base.recorrenteTipo     = document.getElementById('gastoRecorrenteTipo').value;
-              base.recorrenteParcelas = parseInt(document.getElementById('gastoRecorrenteParcelas').value, 10) || 0;
-              base.recorrenteId       = App.utils.generateUUID();
-            }
 
             let gasto;
             if (idH) {
@@ -7526,7 +7261,6 @@ ${tl.length?`<!-- Timeline -->
               if (saved) {
                 gasto.id = String(saved.id);
                 App.state.gastos.push(App.utils.upperObj(gasto));
-                if (recorr && (base.recorrenteParcelas||0) > 1) this._criarParcelas(gasto);
               }
             }
             this.fecharModalGasto();
@@ -7542,169 +7276,6 @@ ${tl.length?`<!-- Timeline -->
           }
         },
 
-        _criarParcelas(orig) {
-          const meses = { mensal:1, trimestral:3, semestral:6, anual:12 };
-          const step  = meses[orig.recorrenteTipo] || 1;
-          for (let i = 1; i < orig.recorrenteParcelas; i++) {
-            const d = new Date(orig.data);
-            d.setMonth(d.getMonth() + step * i);
-            App.state.gastos.push(App.utils.upperObj({
-              id:                  String(Date.now() + i),
-              descricao:           `${orig.descricao} (Parcela ${i+1}/${orig.recorrenteParcelas})`,
-              valor:               orig.valor,
-              data:                d.toISOString().slice(0,10),
-              status:              'pendente',
-              nf_emitida:          false,
-              nf_numero:           null, nf_xml_ref: null, nf_xml_filename: null,
-              recorrente:          true,
-              recorrenteTipo:      orig.recorrenteTipo,
-              recorrenteParcelas:  orig.recorrenteParcelas,
-              recorrenteParcela:   i + 1,
-              recorrenteId:        orig.recorrenteId
-            }));
-          }
-        },
-
-        gerarRecorrentesAutomatico() {
-          // Verifica se já rodou neste mês
-          const chave    = 'erp_recorr_ultimo_mes';
-          const mesAtual = new Date().toISOString().slice(0,7); // "YYYY-MM"
-          const ultimo   = localStorage.getItem(chave) || '';
-          if (ultimo === mesAtual) return; // já gerou este mês
-
-          const meses = { mensal:1, trimestral:3, semestral:6, anual:12 };
-          let gerados  = 0;
-
-          // Para cada gasto recorrente com status 'pago', verifica se a próxima
-          // ocorrência deste mês ou de meses passados está faltando
-          const hoje = new Date();
-          const mesHojeStr = hoje.toISOString().slice(0,7);
-
-          // Pega todos os gastos recorrentes com recorrenteId
-          const recorrIds = [...new Set(
-            App.state.gastos
-              .filter(g => g.recorrente && g.recorrenteId)
-              .map(g => g.recorrenteId)
-          )];
-
-          recorrIds.forEach(rid => {
-            const parcelas = App.state.gastos
-              .filter(g => g.recorrenteId === rid)
-              .sort((a,b) => (a.data||'').localeCompare(b.data||''));
-
-            if (!parcelas.length) return;
-            const orig  = parcelas[0];
-            const step  = meses[orig.recorrenteTipo] || 1;
-            const maxP  = Number(orig.recorrenteParcelas || 0);
-
-            // Última parcela existente
-            const ultima = parcelas[parcelas.length - 1];
-            const [ua, um, ud] = (ultima.data||'').split('-').map(Number);
-
-            // Gera todas as parcelas faltantes até o mês atual
-            let dataAtual = new Date(ua, um - 1 + step, ud || 1);
-            let contador  = parcelas.length + 1;
-
-            while (dataAtual.toISOString().slice(0,7) <= mesHojeStr) {
-              const dataStr = dataAtual.toISOString().slice(0,10);
-              const jaExiste = App.state.gastos.some(g =>
-                g.recorrenteId === rid && g.data === dataStr
-              );
-              const limiteAtingido = maxP > 0 && contador > maxP;
-
-              if (!jaExiste && !limiteAtingido) {
-                App.state.gastos.push(App.utils.upperObj({
-                  id:                  String(Date.now() + Math.random() * 1000 | 0),
-                  descricao:           maxP > 0
-                                         ? `${orig.descricao.replace(/ \(Parcela \d+\/\d+\)$/,'')} (Parcela ${contador}/${maxP})`
-                                         : orig.descricao,
-                  valor:               orig.valor,
-                  data:                dataStr,
-                  status:              'pendente',
-                  nf_emitida:          false,
-                  nf_numero:           null, nf_xml_ref: null, nf_xml_filename: null,
-                  recorrente:          true,
-                  recorrenteTipo:      orig.recorrenteTipo,
-                  recorrenteParcelas:  orig.recorrenteParcelas,
-                  recorrenteParcela:   contador,
-                  recorrenteId:        rid,
-                  contaId:             orig.contaId || null,
-                  geradoAuto:          true
-                }));
-                gerados++;
-              }
-
-              if (limiteAtingido) break;
-              dataAtual.setMonth(dataAtual.getMonth() + step);
-              contador++;
-            }
-          });
-
-          if (gerados > 0) {
-            App.state.gastos.slice(-gerados).forEach(g => DB.salvarDespesa(g));
-            App.ui.mostrarToast(`${gerados} despesa(s) recorrente(s) gerada(s) automaticamente ✅`, 'sucesso');
-          }
-
-          localStorage.setItem(chave, mesAtual);
-        },
-
-        marcarComoPago(id) {
-          const g = App.state.gastos.find(x => String(x.id) === String(id));
-          if (!g) return;
-          g.status = 'pago';
-
-          // Se for recorrente indefinida (parcelas=0) ou ainda com parcelas restantes,
-          // gera a próxima ocorrência automaticamente para o próximo período
-          if (g.recorrente) {
-            const step = { mensal:1, trimestral:3, semestral:6, anual:12 }[g.recorrenteTipo] || 1;
-            const maxParcelas = Number(g.recorrenteParcelas||0);
-            const parcAtual   = Number(g.recorrenteParcela||1);
-            const temMais     = maxParcelas === 0 || parcAtual < maxParcelas;
-
-            if (temMais) {
-              // Calcula próxima data
-              const [ano, mes, dia] = (g.data||new Date().toISOString().slice(0,10)).split('-').map(Number);
-              const proxData = new Date(ano, mes - 1 + step, dia);
-              // Só cria se a próxima data ainda estiver no mesmo ano ou no ano seguinte (até fim de ano)
-              const proxStr  = proxData.toISOString().slice(0,10);
-
-              // Verifica se já existe uma parcela futura desse recorrenteId no mesmo período
-              const jaExiste = App.state.gastos.some(x =>
-                x.recorrenteId === g.recorrenteId &&
-                x.data === proxStr &&
-                x.status === 'pendente'
-              );
-
-              if (!jaExiste) {
-                const proxParcela = parcAtual + 1;
-                App.state.gastos.push(App.utils.upperObj({
-                  id:                  String(Date.now() + Math.random()),
-                  descricao:           maxParcelas > 0
-                                         ? `${g.descricao.replace(/ \(Parcela \d+\/\d+\)$/,'')} (Parcela ${proxParcela}/${maxParcelas})`
-                                         : g.descricao,
-                  valor:               g.valor,
-                  data:                proxStr,
-                  status:              'pendente',
-                  recorrente:          true,
-                  recorrenteTipo:      g.recorrenteTipo,
-                  recorrenteParcelas:  g.recorrenteParcelas,
-                  recorrenteParcela:   proxParcela,
-                  recorrenteId:        g.recorrenteId
-                }));
-              }
-            }
-          }
-
-          DB.salvarDespesa(g);
-          if (g.recorrente) {
-            const novaParcela = App.state.gastos[App.state.gastos.length-1];
-            if (novaParcela && novaParcela !== g) DB.salvarDespesa(novaParcela);
-          }
-          this.renderizar();
-          App.dashboard.atualizar();
-          App.contas.renderizar();
-          App.ui.mostrarToast('Despesa paga! Próxima parcela gerada automaticamente.','sucesso');
-        },
 
         baixarRecebimento(id) {
           const r = App.state.recebimentos.find(x => String(x.id) === String(id));
@@ -7804,8 +7375,7 @@ ${tl.length?`<!-- Timeline -->
                 <div>
                   <div class="font-bold text-white text-base">
                     ${App.utils.escapeHTML(g.descricao)}
-                    ${g.recorrente ? '<span class="bg-purple-600 text-white px-2 py-0.5 rounded text-xs ml-1">Recorrente</span>' : ''}
-                    ${g.recorrenteParcela ? `<span class="text-xs text-purple-400">(${g.recorrenteParcela}/${g.recorrenteParcelas})</span>` : ''}
+
                   </div>
                   <div class="text-xs text-slate-400 mt-1 flex gap-2 items-center flex-wrap">
                     <span>📅 ${App.utils.formatarData(g.data)}</span>
@@ -7819,7 +7389,7 @@ ${tl.length?`<!-- Timeline -->
                 <div class="text-right flex flex-col items-end">
                   <div class="font-bold text-red-400 text-lg">-R$ ${money.formatBR(g.valor)}</div>
                   <div class="flex gap-2 mt-2 flex-wrap justify-end">
-                    ${g.status !== 'pago' ? `<button onclick="App.financeiro.marcarComoPago('${g.id}')" class="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded font-bold transition">Pagar</button>` : ''}
+                    ${g.status !== 'pago' ? `<button onclick="App.financeiro._pagarDespesa('${g.id}')" class="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded font-bold transition">Pagar</button>` : ''}
                     ${g.nf_xml_ref ? `<button onclick="App.utils.baixarXML('gasto','${g.id}')" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition">📎 XML</button>` : ''}
                     <button onclick="App.financeiro.abrirModalGasto('${g.id}')" class="text-xs bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1 rounded font-bold transition">✏️</button>
                     <button onclick="App.financeiro.excluirGasto('${g.id}')" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded transition">🗑️</button>
@@ -7902,8 +7472,6 @@ ${tl.length?`<!-- Timeline -->
         if (ms) ms.value = String(new Date().getMonth());
 
         this.renderizarTudo();
-        App.financeiro.gerarRecorrentesAutomatico();
-
         // Eventos globais — registra só uma vez
         if (!App._listenersRegistrados) {
           document.getElementById('monthSelect').addEventListener('change', () => this.renderizarTudo());
@@ -8713,51 +8281,6 @@ ${tl.length?`<!-- Timeline -->
   })();
   }); // DOMContentLoaded
   </script>
-  <!-- MODAL IMPORTAR OFX -->
-  <div id="modalOFX" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-slate-700">
-      <div class="flex justify-between items-center px-6 py-4 border-b border-slate-700">
-        <div>
-          <h2 class="text-white font-bold text-lg">📄 Importar Extrato OFX</h2>
-          <p class="text-slate-400 text-sm mt-0.5" id="ofxContaNome">—</p>
-        </div>
-        <button onclick="App.contas.fecharModalOFX()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
-      </div>
-
-      <!-- Seleção de arquivo -->
-      <div id="ofxUploadArea" class="px-6 py-8 text-center border-b border-slate-700">
-        <div class="text-5xl mb-3">📂</div>
-        <p class="text-slate-300 font-semibold mb-1">Selecione o arquivo OFX do seu banco</p>
-        <p class="text-slate-500 text-sm mb-4">Exportado pelo Internet Banking (extrato .ofx ou .OFX)</p>
-        <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2 rounded-lg transition inline-block">
-          Escolher arquivo OFX
-          <input type="file" id="ofxFileInput" accept=".ofx,.OFX" class="hidden" onchange="App.contas.lerArquivoOFX(this)">
-        </label>
-      </div>
-
-      <!-- Resumo do extrato -->
-      <div id="ofxResumo" class="hidden px-6 py-3 bg-slate-900/50 border-b border-slate-700 flex flex-wrap gap-4 text-sm">
-        <span class="text-slate-400">Período: <span id="ofxPeriodo" class="text-white font-semibold">—</span></span>
-        <span class="text-slate-400">Transações: <span id="ofxTotal" class="text-white font-semibold">0</span></span>
-        <span class="text-slate-400 text-green-400">Entradas: <span id="ofxEntradas" class="text-green-400 font-semibold">0</span></span>
-        <span class="text-slate-400 text-red-400">Saídas: <span id="ofxSaidas" class="text-red-400 font-semibold">0</span></span>
-        <span class="text-slate-400">Duplicatas ignoradas: <span id="ofxDupl" class="text-yellow-400 font-semibold">0</span></span>
-      </div>
-
-      <!-- Lista de transações -->
-      <div id="ofxLista" class="overflow-y-auto flex-1 px-6 py-3 space-y-2 hidden"></div>
-
-      <!-- Rodapé -->
-      <div id="ofxRodape" class="hidden px-6 py-4 border-t border-slate-700 flex justify-between items-center gap-3">
-        <div class="text-sm text-slate-400"><span id="ofxSelecionadas" class="text-white font-bold">0</span> transações selecionadas</div>
-        <div class="flex gap-3">
-          <button onclick="App.contas.ofxSelecionarTodas()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded font-bold transition">Selecionar todas</button>
-          <button onclick="App.contas.ofxDesmarcarTodas()" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded font-bold transition">Desmarcar todas</button>
-          <button onclick="App.contas.ofxImportar()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2 rounded-lg transition">✅ Importar selecionadas</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- LIGHTBOX -->
   <div id="lightbox" onclick="this.classList.remove('open')">
