@@ -2614,9 +2614,18 @@
                 await DB.salvarPerfil(bk.configuracoes);
               }
 
+              // Limpa state em memória antes de recarregar
+              App.state.produtos = []; App.state.servicos = []; App.state.osLista = [];
+              App.state.gastos = []; App.state.recebimentos = []; App.state.clientes = [];
+              App.state.orcamentos = []; App.state.contas = []; App.state.categorias = [];
+
               // Recarrega tudo do banco
               await DB.carregarTudo();
-              App.init();
+
+              // Renderiza sem recriar listeners (App.init cria listeners duplicados)
+              App.renderizarTudo();
+              setTimeout(() => App._tentarAtualizarDashboard(0), 150);
+
               App.ui.esconderLoading();
               App.ui.mostrarToast('Backup restaurado com sucesso!','sucesso');
               this.fecharModalBackup();
