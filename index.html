@@ -2731,7 +2731,8 @@
 
           this.atualizarGrafico();
           this.atualizarAlertas();
-          this.atualizarPizzas();
+          // Pequeno delay para garantir que containers estejam pintados
+          setTimeout(() => App.dashboard.atualizarPizzas(), 100);
         },
 
         _graficoPizzas: {},
@@ -2795,7 +2796,7 @@
 
           const mkPizza = (canvasId, legendaId, dados, cores) => {
             const canvasElem = document.getElementById(canvasId);
-            if (!canvasElem || canvasElem.offsetWidth === 0) return;
+            if (!canvasElem) return;
             const ctx = canvasElem.getContext('2d');
             if (!ctx) return;
             const key = canvasId;
