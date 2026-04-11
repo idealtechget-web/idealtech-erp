@@ -2786,7 +2786,11 @@
 
           const mkPizza = (canvasId, legendaId, dados, cores) => {
             const canvasElem = document.getElementById(canvasId);
-            if (!canvasElem || canvasElem.offsetWidth === 0) return; // não visível ainda
+            if (!canvasElem) return;
+            if (canvasElem.offsetWidth === 0) {
+              setTimeout(() => App.dashboard.atualizarPizzas(), 150);
+              return;
+            }
             const ctx = canvasElem.getContext('2d');
             if (!ctx) return;
             const key = canvasId;
@@ -2853,11 +2857,15 @@
         },
 
         atualizarGrafico() {
-          const ctx = document.getElementById('graficoMensal')?.getContext('2d');
-          if (!ctx) return;
-          // Se canvas não tem largura ainda (DOM não pintado), agendar e sair
           const canvasEl = document.getElementById('graficoMensal');
-          if (!canvasEl || canvasEl.offsetWidth === 0) return; // canvas não visível, sai sem loop
+          if (!canvasEl) return;
+          // Se canvas ainda sem largura, aguarda DOM renderizar
+          if (canvasEl.offsetWidth === 0) {
+            setTimeout(() => App.dashboard.atualizarGrafico(), 120);
+            return;
+          }
+          const ctx = canvasEl.getContext('2d');
+          if (!ctx) return;
           if (App.state.grafico) App.state.grafico.destroy();
 
           const meses = [], receitas = [], despesas = [];
@@ -2918,7 +2926,7 @@
           if (window.innerWidth < 768) this.fecharSidebar();
 
           if (id === 'dashboard') {
-            requestAnimationFrame(() => App.dashboard.atualizar());
+            setTimeout(() => App._tentarAtualizarDashboard(0), 50);
           }
           if (id === 'estoque')    App.estoque.renderizar();
           if (id === 'servicos')   App.servicos.renderizar();
@@ -7286,6 +7294,17 @@ ${tl.length?`<!-- Timeline -->
           App.dashboard.atualizar();
           App.contas.renderizar();
           App.ui.mostrarToast('Recebimento marcado como recebido','sucesso');
+        },
+
+        _pagarDespesa(id) {
+          const g = App.state.gastos.find(x => String(x.id) === String(id));
+          if (!g) return;
+          g.status = 'pago';
+          DB.salvarDespesa(g);
+          this.renderizar();
+          App.dashboard.atualizar();
+          App.contas.renderizar();
+          App.ui.mostrarToast('Despesa marcada como paga!','sucesso');
         },
 
         async excluirReceita(id) {
