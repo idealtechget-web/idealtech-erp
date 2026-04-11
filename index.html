@@ -2795,11 +2795,7 @@
 
           const mkPizza = (canvasId, legendaId, dados, cores) => {
             const canvasElem = document.getElementById(canvasId);
-            if (!canvasElem) return;
-            if (canvasElem.offsetWidth === 0) {
-              setTimeout(() => App.dashboard.atualizarPizzas(), 150);
-              return;
-            }
+            if (!canvasElem || canvasElem.offsetWidth === 0) return;
             const ctx = canvasElem.getContext('2d');
             if (!ctx) return;
             const key = canvasId;
@@ -2867,12 +2863,7 @@
 
         atualizarGrafico() {
           const canvasEl = document.getElementById('graficoMensal');
-          if (!canvasEl) return;
-          // Se canvas ainda sem largura, aguarda DOM renderizar
-          if (canvasEl.offsetWidth === 0) {
-            setTimeout(() => App.dashboard.atualizarGrafico(), 120);
-            return;
-          }
+          if (!canvasEl || canvasEl.offsetWidth === 0) return;
           const ctx = canvasEl.getContext('2d');
           if (!ctx) return;
           if (App.state.grafico) App.state.grafico.destroy();
@@ -7459,9 +7450,11 @@ ${tl.length?`<!-- Timeline -->
         if (visivel) {
           App.dashboard.atualizar();
           App.contas.renderizar();
-        } else if (tentativa < 20) {
-          // Canvas ainda sem dimensão — tenta novamente em 100ms
-          setTimeout(() => App._tentarAtualizarDashboard(tentativa + 1), 100);
+        } else if (tentativa < 30) {
+          // Canvas sem dimensão (app oculto ou layout ainda renderizando)
+          // Aumenta o intervalo progressivamente: 100ms → 200ms → 300ms...
+          const delay = Math.min(100 + tentativa * 50, 500);
+          setTimeout(() => App._tentarAtualizarDashboard(tentativa + 1), delay);
         }
       },
 
