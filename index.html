@@ -7785,6 +7785,7 @@ ${tl.length?`<!-- Timeline -->
         this._iniciado = false;
         this._carregando = false;
         App._listenersRegistrados = false;
+        this._dadosCarregados = false;
         if (App._keepAliveInterval) { clearInterval(App._keepAliveInterval); App._keepAliveInterval = null; }
         this._mostrarTelaAuth();
         // Limpar estado
@@ -7801,12 +7802,9 @@ ${tl.length?`<!-- Timeline -->
       async _onLogin(user) {
         if (this._carregando) return;
         // Só ignora se já iniciado E os dados realmente carregaram
-        const dadosCarregados = App.state.recebimentos.length > 0 ||
-                                App.state.gastos.length > 0 ||
-                                App.state.osLista.length > 0 ||
-                                App.state.clientes.length > 0 ||
-                                App.state.categorias.length > 0;
-        if (this._iniciado && this.user?.id === user.id && dadosCarregados) return;
+        // Usa flag dedicado em vez de checar length dos arrays
+        // (arrays podem estar vazios legitimamente após exclusões do usuário)
+        if (this._iniciado && this.user?.id === user.id && this._dadosCarregados) return;
         this._carregando = true;
         this._iniciado = true;
         this.user = user;
@@ -7821,9 +7819,11 @@ ${tl.length?`<!-- Timeline -->
             new Promise((_, rej) => setTimeout(() => rej(new Error('timeout global')), 30000))
           ]);
           carregouOk = true;
+          this._dadosCarregados = true;
         } catch(e) {
           console.error('[Auth] Erro ao carregar:', e.message);
           this._iniciado = false;
+          this._dadosCarregados = false;
         }
 
         this._carregando = false;
@@ -7985,7 +7985,9 @@ ${tl.length?`<!-- Timeline -->
           ...c, tipo: (c.tipo||'').toLowerCase(), cor: (c.cor||'#64748b')
         }));
         // Se não vieram categorias do banco, cria as padrão
+        console.log('[DB] categorias carregadas do banco:', App.state.categorias.length);
         if (!App.state.categorias.length) {
+          console.warn('[DB] Nenhuma categoria no banco — criando padrão...');
           const cats = [
             {nome:'Serviços Prestados',tipo:'receita',icone:'⚙️',cor:'#10b981'},
             {nome:'Venda de Produtos', tipo:'receita',icone:'📦',cor:'#3b82f6'},
