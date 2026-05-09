@@ -4126,8 +4126,11 @@ ${el.innerHTML}
           App.ui.mostrarToast('Categoria adicionada!','sucesso');
         },
         async excluir(id) {
+          console.log('[CAT] excluir chamado, id recebido:', id, typeof id);
+          if (!id || id === 'undefined') { console.error('[CAT] id inválido!'); return; }
           const idNorm = String(id).toLowerCase();
-          await DB.excluirCategoria(idNorm);
+          const ok = await DB.excluirCategoria(idNorm);
+          if (ok === false) return; // erro já mostrado pelo DB
           App.state.categorias = App.state.categorias.filter(c => String(c.id).toLowerCase() !== idNorm);
           this.renderizar();
           App.utils.popularSelectCategorias([['receitaCategoriaId','receita'],['gastoCategoriaId','despesa']]);
@@ -8243,8 +8246,21 @@ ${tl.length?`<!-- Timeline -->
       },
 
       async excluirCategoria(id) {
-        // Garante que o UUID esteja em minúsculas (não pode ter sido convertido por upperObj)
-        await supa.from('categorias').delete().eq('id', String(id).toLowerCase()).eq('user_id', this.uid());
+        const uid = this.uid();
+        if (!uid) { console.error('[DB] excluirCategoria: uid nulo'); return false; }
+        const idStr = String(id).toLowerCase();
+        console.log('[DB] excluirCategoria tentando id:', idStr);
+        const { error, count } = await supa.from('categorias')
+          .delete({ count: 'exact' })
+          .eq('id', idStr)
+          .eq('user_id', uid);
+        if (error) {
+          console.error('[DB] excluirCategoria erro:', error);
+          App.ui.mostrarToast('Erro ao excluir categoria: ' + error.message, 'erro');
+          return false;
+        }
+        console.log('[DB] excluirCategoria removeu', count, 'registro(s)');
+        return true;
       },
 
       async salvarOrcamento(o) {
