@@ -7716,20 +7716,29 @@ ${tl.length?`<!-- Timeline -->
 
       _iniciado: false,
       _carregando: false,
+      _dadosCarregados: false,
+      _loginPromise: null,  // Lock via Promise para evitar chamadas paralelas
 
       async init() {
         // Mostra tela de login imediatamente enquanto verifica sessão
         this._mostrarTelaAuth();
 
         // Ouve mudanças de autenticação — registrado UMA única vez
-        supa.auth.onAuthStateChange(async (event, session) => {
+        supa.auth.onAuthStateChange((event, session) => {
           console.log('[Auth] evento:', event, session?.user?.email);
           if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-            // Tanto login novo quanto reload de página com sessão ativa
-            await this._onLogin(session.user);
+            // Encadeia na mesma Promise — garante execução serial, nunca paralela
+            if (!this._loginPromise) {
+              this._loginPromise = this._onLogin(session.user)
+                .finally(() => { this._loginPromise = null; });
+            } else {
+              console.log('[Auth] evento ignorado — login já em andamento:', event);
+            }
           } else if (event === 'SIGNED_OUT') {
             this._iniciado = false;
             this._carregando = false;
+            this._dadosCarregados = false;
+            this._loginPromise = null;
             this._mostrarTelaAuth();
           } else if (event === 'INITIAL_SESSION' && !session) {
             this._mostrarTelaAuth();
@@ -7800,12 +7809,12 @@ ${tl.length?`<!-- Timeline -->
       },
 
       async _onLogin(user) {
-        // Lock síncrono: se já está carregando ou já carregou para este usuário, ignora
-        if (this._carregando) { console.log('[Auth] _onLogin ignorado — já carregando'); return; }
-        if (this._dadosCarregados && this.user?.id === user.id) { console.log('[Auth] _onLogin ignorado — já carregado'); return; }
-        // Seta o lock IMEDIATAMENTE (antes de qualquer await) para barrar chamadas paralelas
+        // Se já carregou para este usuário, não faz nada
+        if (this._dadosCarregados && this.user?.id === user.id) {
+          console.log('[Auth] _onLogin ignorado — dados já carregados');
+          return;
+        }
         this._carregando = true;
-        this._dadosCarregados = false;
         this._iniciado = true;
         this.user = user;
 
