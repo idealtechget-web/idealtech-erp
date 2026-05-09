@@ -7800,12 +7800,12 @@ ${tl.length?`<!-- Timeline -->
       },
 
       async _onLogin(user) {
-        if (this._carregando) return;
-        // Só ignora se já iniciado E os dados realmente carregaram
-        // Usa flag dedicado em vez de checar length dos arrays
-        // (arrays podem estar vazios legitimamente após exclusões do usuário)
-        if (this._iniciado && this.user?.id === user.id && this._dadosCarregados) return;
+        // Lock síncrono: se já está carregando ou já carregou para este usuário, ignora
+        if (this._carregando) { console.log('[Auth] _onLogin ignorado — já carregando'); return; }
+        if (this._dadosCarregados && this.user?.id === user.id) { console.log('[Auth] _onLogin ignorado — já carregado'); return; }
+        // Seta o lock IMEDIATAMENTE (antes de qualquer await) para barrar chamadas paralelas
         this._carregando = true;
+        this._dadosCarregados = false;
         this._iniciado = true;
         this.user = user;
 
