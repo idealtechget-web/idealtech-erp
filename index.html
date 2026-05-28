@@ -1467,6 +1467,13 @@
           <input type="checkbox" id="receitaRecebido" class="w-4 h-4">
           <span class="text-sm text-slate-300">Já está pago/recebido?</span>
         </div>
+        <div class="flex items-center gap-2 mt-1 bg-slate-900 rounded-lg px-3 py-2 border border-amber-800/40">
+          <input type="checkbox" id="receitaAporte" class="w-4 h-4 accent-amber-500">
+          <div>
+            <span class="text-sm text-amber-300 font-bold">💰 Aporte de Capital</span>
+            <p class="text-xs text-slate-500 mt-0.5">Não conta no limite de faturamento MEI (R$ 81.000/ano)</p>
+          </div>
+        </div>
         <button onclick="App.financeiro.salvarReceita()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded shadow transition">Salvar Receita</button>
         <button onclick="App.financeiro.fecharModalReceita()" class="w-full text-slate-400 mt-2 text-sm hover:text-white">Cancelar</button>
       </div>
@@ -2710,8 +2717,9 @@
           lpEl.className = `text-lg font-bold ${lucroPrev >= 0 ? 'text-green-300' : 'text-red-400'}`;
 
           // Ano — realizados + pendentes
-          const recAno     = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status === 'recebido');
-          const recAnoPend = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status !== 'recebido');
+          // Aportes de capital não contam no limite MEI
+          const recAno     = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status === 'recebido' && !r.aporte);
+          const recAnoPend = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status !== 'recebido' && !r.aporte);
           const totAno     = recAno.reduce((a,b) => a + Number(b.valor||0), 0);
           const totAnoPend = recAnoPend.reduce((a,b) => a + Number(b.valor||0), 0);
           const rest       = App.config.limiteMEI - totAno;
@@ -2744,7 +2752,7 @@
           const alertas = [];
 
           // MEI — 75% e 90%
-          const totAno = App.state.recebimentos.filter(r=>(r.data||'').startsWith(anoStr)&&r.status==='recebido').reduce((a,b)=>a+Number(b.valor||0),0);
+          const totAno = App.state.recebimentos.filter(r=>(r.data||'').startsWith(anoStr)&&r.status==='recebido'&&!r.aporte).reduce((a,b)=>a+Number(b.valor||0),0);
           const perc   = totAno / App.config.limiteMEI * 100;
           if (perc >= 90) alertas.push({ tipo:'erro',  icone:'🚨', msg: `MEI em <strong>${perc.toFixed(1)}%</strong> do limite anual — faltam apenas R$ ${App.utils.formatarMoeda(App.config.limiteMEI - totAno)}!` });
           else if (perc >= 75) alertas.push({ tipo:'aviso', icone:'⚠️', msg: `MEI em <strong>${perc.toFixed(1)}%</strong> do limite anual — fique de olho no faturamento.` });
@@ -3797,7 +3805,7 @@ Importar como Receita no Financeiro?`)) return;
             const meses = Array.from({length:12},(_,i)=>i+1);
             const dados = meses.map(m => {
               const ms = `${ano}-${String(m).padStart(2,'0')}`;
-              const recs  = App.state.recebimentos.filter(r=>(r.data||'').startsWith(ms));
+              const recs  = App.state.recebimentos.filter(r=>(r.data||'').startsWith(ms) && !r.aporte);
               const gas   = App.state.gastos.filter(g=>(g.data||'').startsWith(ms));
               const recBruto  = recs.reduce((a,b)=>a+Number(b.valor||0),0);
               const recPago   = recs.filter(r=>r.status==='recebido').reduce((a,b)=>a+Number(b.valor||0),0);
@@ -4753,7 +4761,7 @@ ${el.innerHTML}
           const fim    = document.getElementById('relFim').value;
           if (!inicio || !fim) { App.ui.mostrarToast('Selecione o período','erro'); return; }
 
-          const receitas = App.state.recebimentos.filter(r => r.data >= inicio && r.data <= fim && r.status === 'recebido');
+          const receitas = App.state.recebimentos.filter(r => r.data >= inicio && r.data <= fim && r.status === 'recebido' && !r.aporte);
           const despesas = App.state.gastos.filter(g => g.data >= inicio && g.data <= fim && g.status === 'pago');
           const totalR   = receitas.reduce((a,b) => a + Number(b.valor||0), 0);
           const totalD   = despesas.reduce((a,b) => a + Number(b.valor||0), 0);
@@ -7181,6 +7189,7 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaRecebido').checked        = r.status === 'recebido';
             document.getElementById('receitaFormaPagamento').value    = r.formaPagamento || 'Pix';
             document.getElementById('receitaObs').value                  = r.obs || '';
+            document.getElementById('receitaAporte').checked             = !!r.aporte;
             document.getElementById('receitaContaId').value              = r.contaId || '';
             document.getElementById('receitaCategoriaId').value         = r.categoriaId || '';
             App.ui.toggleNfCampos('receita');
@@ -7203,6 +7212,7 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaData').value           = new Date().toISOString().slice(0,10);
             document.getElementById('receitaTemNF').checked        = false;
             document.getElementById('receitaRecebido').checked     = true;
+            document.getElementById('receitaAporte').checked       = false;
             document.getElementById('receitaFormaPagamento').value = 'Pix';
             document.getElementById('receitaObs').value              = '';
             document.getElementById('receitaContaId').value         = '';
@@ -7245,7 +7255,8 @@ ${tl.length?`<!-- Timeline -->
               nf_emitida:     temNF,
               nf_tipo:        temNF ? (document.getElementById('receitaTipoNF')?.value||'NFe') : null,
               nf_numero:      temNF ? document.getElementById('receitaNumNF').value.trim() : null,
-              origem:         'Manual'
+              origem:         'Manual',
+              aporte:         document.getElementById('receitaAporte')?.checked || false
             };
 
             let rec;
@@ -7461,6 +7472,7 @@ ${tl.length?`<!-- Timeline -->
                     <span>📅 ${App.utils.formatarData(r.data)}</span>
                     <span class="status-badge ${r.status==='recebido'?'status-pago':'status-pendente'}">${r.status==='recebido'?'Pago':'Pendente'}</span>
                     <span class="text-xs bg-slate-700 px-2 py-0.5 rounded">${r.formaPagamento||'Pix'}</span>
+                    ${r.aporte ? '<span class="bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded font-bold">💰 Aporte</span>' : ''}
                     ${r.nf_emitida ? `<span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">${r.nf_tipo||'NFe'} ${App.utils.escapeHTML(r.nf_numero||'S/N')}</span>` : ''}
                     ${r.obs ? `<span class="text-slate-400 italic text-xs">💬 ${App.utils.escapeHTML(r.obs)}</span>` : ''}
                     ${r.categoriaId ? (() => { const ct=App.state.categorias.find(x=>x.id===r.categoriaId); return ct?`<span class="text-xs px-2 py-0.5 rounded font-bold" style="background:${ct.cor}22;color:${ct.cor};border:1px solid ${ct.cor}">${ct.icone} ${App.utils.escapeHTML(ct.nome)}</span>`:''; })() : ''}
