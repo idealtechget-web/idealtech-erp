@@ -850,6 +850,10 @@
               <option value="preco">Menor Preço</option>
               <option value="estoque">Menor Estoque</option>
             </select>
+            <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-white transition select-none">
+              <input type="checkbox" id="estoqueMostrarDesc" onchange="App.estoque.renderizar()" class="w-4 h-4 rounded">
+              <span>Mostrar descontinuados</span>
+            </label>
           </div>
         </div>
         <div class="flex flex-wrap gap-2">
@@ -873,7 +877,7 @@
     <!-- SERVIÇOS -->
     <div id="aba-servicos" class="aba-conteudo hidden">
       <div class="flex justify-between items-center mb-4 gap-4">
-        <div class="flex gap-2 flex-1">
+        <div class="flex gap-2 flex-wrap items-center flex-1">
           <input type="text" id="buscaServicos" placeholder="🔍 Buscar serviço..." onkeyup="App.servicos.renderizar()"
             class="px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none text-sm w-56">
           <select id="ordenarServicos" onchange="App.servicos.renderizar()" class="bg-slate-800 border border-slate-600 text-white rounded px-2 py-2 outline-none text-sm">
@@ -882,6 +886,10 @@
             <option value="preco_asc">Menor Preço</option>
             <option value="preco_desc">Maior Preço</option>
           </select>
+          <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-white transition select-none">
+            <input type="checkbox" id="servicosMostrarDesc" onchange="App.servicos.renderizar()" class="w-4 h-4 rounded">
+            <span>Mostrar descontinuados</span>
+          </label>
         </div>
       </div>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -1030,6 +1038,10 @@
               <option value="tipo">Tipo (PF/PJ)</option>
               <option value="recente">Mais Recente</option>
             </select>
+            <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-400 hover:text-white transition select-none">
+              <input type="checkbox" id="clientesMostrarInativos" onchange="App.clientes.renderizar()" class="w-4 h-4 rounded">
+              <span>Mostrar inativos <span id="clientesContadorInat" class="text-slate-500 text-xs"></span></span>
+            </label>
             <button onclick="App.clientes.abrirModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold transition">+ Novo Cliente</button>
           </div>
         </div>
@@ -2387,8 +2399,10 @@
           ['pdvClienteSelect','osClienteSelect','receitaClienteSelect','orcClienteSelect'].forEach(selId => {
             const sel = document.getElementById(selId);
             if (!sel) return;
+            // Só mostra clientes ativos nos selects
+            const ativos = App.state.clientes.filter(c => c.ativo !== false);
             sel.innerHTML = '<option value="">-- Selecionar Cliente --</option>' +
-              App.state.clientes.map(c => `<option value="${c.id}">${App.utils.escapeHTML(c.nome)}</option>`).join('');
+              ativos.map(c => `<option value="${c.id}">${App.utils.escapeHTML(c.nome)}</option>`).join('');
           });
         }
       },
@@ -3015,13 +3029,15 @@
         renderizar() {
           const container = document.getElementById('listaEstoqueCompleta');
           if (!container) return;
-          const termo = (document.getElementById('buscaEstoque')?.value || '').toLowerCase();
-          const ordem = document.getElementById('ordenarEstoque')?.value || 'az';
-          let prods = App.state.produtos.filter(p =>
-            (p.descricao||p.nome||'').toLowerCase().includes(termo) ||
-            (p.ncm||'').includes(termo) ||
-            (p.codigo_barras||p.ean||p.cEAN||'').includes(termo)
-          );
+          const termo        = (document.getElementById('buscaEstoque')?.value || '').toLowerCase();
+          const ordem        = document.getElementById('ordenarEstoque')?.value || 'az';
+          const mostrarDesc  = document.getElementById('estoqueMostrarDesc')?.checked || false;
+          let prods = App.state.produtos.filter(p => {
+            if (!mostrarDesc && p.descontinuado) return false;
+            return (p.descricao||p.nome||'').toLowerCase().includes(termo) ||
+                   (p.ncm||'').includes(termo) ||
+                   (p.codigo_barras||p.ean||p.cEAN||'').includes(termo);
+          });
           if (ordem === 'az')           prods.sort((a,b)=>(a.descricao||a.nome||'').localeCompare(b.descricao||b.nome||''));
           else if (ordem === 'za')      prods.sort((a,b)=>(b.descricao||b.nome||'').localeCompare(a.descricao||a.nome||''));
           else if (ordem === 'preco')   prods.sort((a,b)=>Number(a.preco_venda||0)-Number(b.preco_venda||0));
@@ -3036,20 +3052,42 @@
                 <div class="text-right">
                   <div class="text-sm text-slate-300">Estoque: <strong class="text-white">${p.quantidade_estoque} ${p.unidade}</strong></div>
                   <div class="text-green-400 font-bold">Venda: R$ ${money.formatBR(p.preco_venda)}</div>
+                  ${p.descontinuado ? '<div class="text-xs text-orange-400 font-bold mt-1">⚠ Descontinuado</div>' : ''}
                 </div>
-                <button onclick="App.estoque.abrirModal('${p.id}')" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-white font-bold transition">✏️</button>
-                <button onclick="App.estoque.excluir('${p.id}')" class="bg-red-700 hover:bg-red-600 px-3 py-2 rounded text-white font-bold transition">🗑️</button>
+                <button onclick="App.estoque.abrirModal('${p.id}')" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-white font-bold transition" title="Editar">✏️</button>
+                <button onclick="App.estoque.descontinuar('${p.id}')" class="${p.descontinuado?'bg-emerald-700 hover:bg-emerald-600':'bg-orange-700 hover:bg-orange-600'} px-3 py-2 rounded text-white font-bold transition" title="${p.descontinuado?'Reativar':'Descontinuar'}">${p.descontinuado?'✅':'⚠'}</button>
+                <button onclick="App.estoque.excluir('${p.id}')" class="bg-red-700 hover:bg-red-600 px-3 py-2 rounded text-white font-bold transition" title="Excluir">🗑️</button>
               </div>
             </div>
           `).join('') || '<p class="text-slate-500 py-6 text-center">Nenhum produto cadastrado.</p>';
         },
 
         async excluir(id) {
-          if (!confirm('Deseja realmente excluir este produto? Esta ação não pode ser desfeita.')) return;
+          const p = App.state.produtos.find(x => String(x.id) === String(id));
+          if (!p) return;
+          // Verifica se foi usado em OS, orçamento, PDV ou estoque
+          const usadoOS  = App.state.osLista.some(os => (os.pecas||[]).some(pc => String(pc.id) === String(id)));
+          const usadoOrc = App.state.orcamentos.some(o => (o.pecas||[]).some(pc => String(pc.id) === String(id)));
+          const usadoPDV = App.state.recebimentos.some(r => (r.itens||[]).some(it => String(it.id) === String(id)));
+          if (usadoOS || usadoOrc || usadoPDV) {
+            App.ui.mostrarToast('Este item possui histórico de utilização e não pode ser excluído. Marque-o como descontinuado.','erro');
+            return;
+          }
+          if (!confirm(`Excluir o produto "${p.descricao}"? Esta ação não pode ser desfeita.`)) return;
           await DB.excluirProduto(id);
-          App.state.produtos = App.state.produtos.filter(p => String(p.id) !== String(id));
+          App.state.produtos = App.state.produtos.filter(x => String(x.id) !== String(id));
           this.renderizar();
           App.ui.mostrarToast('Produto excluído!', 'sucesso');
+        },
+
+        async descontinuar(id) {
+          const p = App.state.produtos.find(x => String(x.id) === String(id));
+          if (!p) return;
+          p.descontinuado = !p.descontinuado;
+          p.ativo = !p.descontinuado;
+          await DB.salvarProduto(p);
+          this.renderizar();
+          App.ui.mostrarToast(p.descontinuado ? 'Produto marcado como descontinuado!' : 'Produto reativado!', 'sucesso');
         },
 
         // ── IMPORTAÇÃO XML EM LOTE (menu estoque) ──────────────────────
@@ -3469,29 +3507,56 @@ Importar como Receita no Financeiro?`)) return;
           App.ui.mostrarToast('Serviço adicionado!','sucesso');
         },
         async remover(id) {
-          if (!confirm('Deseja realmente excluir este serviço?')) return;
+          const s = App.state.servicos.find(x => String(x.id) === String(id));
+          if (!s) return;
+          const usadoOS  = App.state.osLista.some(os => (os.servicos||[]).some(sv => String(sv.id) === String(id)));
+          const usadoOrc = App.state.orcamentos.some(o => (o.servicos||[]).some(sv => String(sv.id) === String(id)));
+          if (usadoOS || usadoOrc) {
+            App.ui.mostrarToast('Este item possui histórico de utilização e não pode ser excluído. Marque-o como descontinuado.','erro');
+            return;
+          }
+          if (!confirm(`Excluir o serviço "${s.nome}"? Esta ação não pode ser desfeita.`)) return;
           await DB.excluirServico(id);
-          App.state.servicos = App.state.servicos.filter(s => String(s.id) !== String(id));
+          App.state.servicos = App.state.servicos.filter(x => String(x.id) !== String(id));
           this.renderizar();
           App.ui.mostrarToast('Serviço removido','sucesso');
+        },
+
+        descontinuar(id) {
+          const s = App.state.servicos.find(x => String(x.id) === String(id));
+          if (!s) return;
+          s.descontinuado = !s.descontinuado;
+          DB.salvarServico(s);
+          this.renderizar();
+          App.ui.mostrarToast(s.descontinuado ? 'Serviço descontinuado!' : 'Serviço reativado!', 'sucesso');
         },
         renderizar() {
           const c = document.getElementById('listaServicosCompleta');
           if (!c) return;
           const termoS = (document.getElementById('buscaServicos')?.value || '').toLowerCase();
           const ordemS = document.getElementById('ordenarServicos')?.value || 'az';
-          let servs = App.state.servicos.filter(s => (s.nome||'').toLowerCase().includes(termoS));
-          if (ordemS === 'az')          servs.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
-          else if (ordemS === 'za')     servs.sort((a,b)=>(b.nome||'').localeCompare(a.nome||''));
+          const mostrarDescS = document.getElementById('servicosMostrarDesc')?.checked || false;
+          let servs = App.state.servicos.filter(s => {
+            if (!mostrarDescS && s.descontinuado) return false;
+            return (s.nome||'').toLowerCase().includes(termoS);
+          });
+          if (ordemS === 'az')              servs.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+          else if (ordemS === 'za')         servs.sort((a,b)=>(b.nome||'').localeCompare(a.nome||''));
           else if (ordemS === 'preco_asc')  servs.sort((a,b)=>Number(a.valor||0)-Number(b.valor||0));
           else if (ordemS === 'preco_desc') servs.sort((a,b)=>Number(b.valor||0)-Number(a.valor||0));
           c.innerHTML = servs.map(s => `
-            <div class="bg-slate-900 p-3 rounded flex justify-between items-center text-sm border border-slate-700 card-item">
+            <div class="bg-slate-900 p-3 rounded flex justify-between items-center text-sm border border-slate-700 card-item ${s.descontinuado?'opacity-60':''}">
               <div>
-                <div class="font-bold text-white text-base">${App.utils.escapeHTML(s.nome)}</div>
+                <div class="font-bold ${s.descontinuado?'text-slate-400':'text-white'} text-base flex items-center gap-2">
+                  ${App.utils.escapeHTML(s.nome)}
+                  ${s.descontinuado?'<span class="text-xs bg-orange-900/50 text-orange-400 px-2 py-0.5 rounded">Descontinuado</span>':''}
+                </div>
                 <div class="text-green-400 font-bold mt-1">R$ ${money.formatBR(s.valor)}</div>
               </div>
-              <button onclick="App.servicos.remover('${s.id}')" class="text-red-500 hover:text-red-400 text-lg transition">🗑️</button>
+              <div class="flex gap-2">
+                <button onclick="App.servicos.descontinuar('${s.id}')" class="${s.descontinuado?'text-emerald-400 hover:text-emerald-300':'text-orange-400 hover:text-orange-300'} text-lg transition" title="${s.descontinuado?'Reativar':'Descontinuar'}">${s.descontinuado?'✅':'⚠'}</button>
+                <button onclick="App.servicos.remover('${s.id}')" class="text-red-500 hover:text-red-400 text-lg transition" title="Excluir">🗑️</button>
+              </div>
             </div>
           `).join('') || '<p class="text-slate-500 text-center py-4">Sem serviços cadastrados.</p>';
         }
@@ -3697,52 +3762,86 @@ Importar como Receita no Financeiro?`)) return;
         },
 
         renderizar() {
-          const termo  = (document.getElementById('buscaClientes')?.value || '').toLowerCase();
-          const ordem  = document.getElementById('ordenarClientes')?.value || 'az';
-          let filt = App.state.clientes.filter(c =>
-            (c.nome        || '').toLowerCase().includes(termo) ||
-            (c.telefone    || '').toLowerCase().includes(termo) ||
-            (c.cnpj        || '').replace(/\D/g,'').includes(termo.replace(/\D/g,'')) ||
-            (c.cpf         || '').replace(/\D/g,'').includes(termo.replace(/\D/g,'')) ||
-            (c.razao_social|| '').toLowerCase().includes(termo)
-          );
-          if (ordem === 'az')     filt.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
-          else if (ordem === 'za') filt.sort((a,b) => (b.nome||'').localeCompare(a.nome||''));
+          const termo       = (document.getElementById('buscaClientes')?.value || '').toLowerCase();
+          const ordem       = document.getElementById('ordenarClientes')?.value || 'az';
+          const mostrarInat = document.getElementById('clientesMostrarInativos')?.checked || false;
+          let filt = App.state.clientes.filter(c => {
+            // Filtro ativo/inativo — ativo=undefined tratado como ativo
+            if (!mostrarInat && c.ativo === false) return false;
+            return (c.nome        || '').toLowerCase().includes(termo) ||
+                   (c.telefone    || '').toLowerCase().includes(termo) ||
+                   (c.cnpj        || '').replace(/\D/g,'').includes(termo.replace(/\D/g,'')) ||
+                   (c.cpf         || '').replace(/\D/g,'').includes(termo.replace(/\D/g,'')) ||
+                   (c.razao_social|| '').toLowerCase().includes(termo);
+          });
+          if (ordem === 'az')       filt.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+          else if (ordem === 'za')  filt.sort((a,b) => (b.nome||'').localeCompare(a.nome||''));
           else if (ordem === 'tipo') filt.sort((a,b) => (a.tipo||'PF').localeCompare(b.tipo||'PF'));
           else if (ordem === 'recente') filt.sort((a,b) => Number(b.id||0) - Number(a.id||0));
           const lista = document.getElementById('listaClientes');
           if (!lista) return;
+          // Contador
+          const totalInat = App.state.clientes.filter(c => c.ativo === false).length;
+          const contadorEl = document.getElementById('clientesContadorInat');
+          if (contadorEl) contadorEl.textContent = totalInat > 0 ? `(${totalInat} inativo${totalInat>1?'s':''})` : '';
           lista.innerHTML = filt.map(c => {
+            const inativo   = c.ativo === false;
             const tipoBadge = c.tipo === 'PJ'
               ? '<span class="bg-blue-600  text-white text-xs px-2 py-0.5 rounded ml-2">PJ</span>'
               : '<span class="bg-green-600 text-white text-xs px-2 py-0.5 rounded ml-2">PF</span>';
-            const cnpjInfo = c.cnpj ? `<div class="text-xs text-blue-400 mt-1">CNPJ: ${cnpjUtils.format(c.cnpj)}</div>` : '';
-            const cpfInfo  = c.cpf  ? `<div class="text-xs text-slate-400 mt-0.5">CPF: ${App.utils.escapeHTML(c.cpf)}</div>` : '';
-            const endPF    = c.logradouroPF ? `<div class="text-xs text-slate-500 mt-0.5">${App.utils.escapeHTML(c.logradouroPF+', '+c.numeroPF+' - '+c.cidadePF+'/'+c.ufPF)}</div>` : '';
+            const inatBadge = inativo ? '<span class="bg-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded ml-2">Inativo</span>' : '';
+            const cnpjInfo  = c.cnpj ? `<div class="text-xs text-blue-400 mt-1">CNPJ: ${cnpjUtils.format(c.cnpj)}</div>` : '';
+            const cpfInfo   = c.cpf  ? `<div class="text-xs text-slate-400 mt-0.5">CPF: ${App.utils.escapeHTML(c.cpf)}</div>` : '';
+            const endPF     = c.logradouroPF ? `<div class="text-xs text-slate-500 mt-0.5">${App.utils.escapeHTML(c.logradouroPF+', '+c.numeroPF+' - '+c.cidadePF+'/'+c.ufPF)}</div>` : '';
             return `
-              <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 flex justify-between items-center">
+              <div class="bg-slate-900 p-4 rounded-lg border ${inativo?'border-slate-700 opacity-60':'border-slate-700'} flex justify-between items-center">
                 <div>
-                  <div class="font-bold text-white flex items-center">${App.utils.escapeHTML(c.nome)} ${tipoBadge}</div>
+                  <div class="font-bold ${inativo?'text-slate-400':'text-white'} flex items-center flex-wrap gap-1">
+                    ${App.utils.escapeHTML(c.nome)} ${tipoBadge}${inatBadge}
+                  </div>
                   <div class="text-xs text-slate-400">${App.utils.escapeHTML(c.telefone || 'Sem telefone')}</div>
                   ${cnpjInfo}${cpfInfo}${endPF}
                   ${c.obs ? `<div class="text-xs text-slate-500">Obs: ${App.utils.escapeHTML(c.obs)}</div>` : ''}
                 </div>
                 <div class="flex gap-2">
-                  <button onclick="App.clientes.abrirModal('${c.id}')"     class="text-blue-400  hover:text-blue-300">✏️</button>
-                  <button onclick="App.clientes.verHistorico('${c.id}')"   class="text-green-400 hover:text-green-300">📜</button>
-                  <button onclick="App.clientes.excluir('${c.id}')"        class="text-red-400   hover:text-red-300">🗑️</button>
+                  <button onclick="App.clientes.abrirModal('${c.id}')" class="text-blue-400 hover:text-blue-300" title="Editar">✏️</button>
+                  <button onclick="App.clientes.verHistorico('${c.id}')" class="text-green-400 hover:text-green-300" title="Histórico">📜</button>
+                  <button onclick="App.clientes.inativar('${c.id}')" class="${inativo?'text-emerald-400 hover:text-emerald-300':'text-yellow-400 hover:text-yellow-300'}" title="${inativo?'Reativar':'Inativar'}">${inativo?'✅':'🚫'}</button>
+                  <button onclick="App.clientes.excluir('${c.id}')" class="text-red-400 hover:text-red-300" title="Excluir">🗑️</button>
                 </div>
               </div>`;
-          }).join('') || '<p class="text-slate-500">Nenhum cliente cadastrado.</p>';
+          }).join('') || '<p class="text-slate-500">Nenhum cliente encontrado.</p>';
         },
 
         async excluir(id) {
-          if (!confirm('Deseja realmente excluir este cliente?')) return;
+          const c = App.state.clientes.find(x => String(x.id) === String(id));
+          if (!c) return;
+          // Verifica vínculos
+          const temOS     = App.state.osLista.some(o => String(o.clienteId) === String(id) || o.cliente === c.nome);
+          const temOrc    = App.state.orcamentos.some(o => String(o.clienteId) === String(id) || o.cliente === c.nome);
+          const temVenda  = App.state.recebimentos.some(r => String(r.clienteId) === String(id) || r.cliente === c.nome);
+          const temGasto  = App.state.gastos.some(g => String(g.clienteId) === String(id));
+          if (temOS || temOrc || temVenda || temGasto) {
+            App.ui.mostrarToast('Este cliente possui registros vinculados e não pode ser excluído. Marque-o como inativo caso não deseje mais utilizá-lo.','erro');
+            return;
+          }
+          if (!confirm(`Excluir o cliente "${c.nome}"? Esta ação não pode ser desfeita.`)) return;
           await DB.excluirCliente(id);
-          App.state.clientes = App.state.clientes.filter(c => String(c.id) !== String(id));
+          App.state.clientes = App.state.clientes.filter(x => String(x.id) !== String(id));
           this.renderizar();
           App.utils.popularSelectClientes();
           App.ui.mostrarToast('Cliente excluído','sucesso');
+        },
+
+        async inativar(id) {
+          const c = App.state.clientes.find(x => String(x.id) === String(id));
+          if (!c) return;
+          const novoStatus = c.ativo === false ? true : false; // toggle
+          c.ativo = novoStatus;
+          await DB.salvarCliente(c);
+          this.renderizar();
+          App.utils.popularSelectClientes();
+          App.ui.mostrarToast(novoStatus ? 'Cliente reativado!' : 'Cliente marcado como inativo!', 'sucesso');
         },
 
         verHistorico(clienteId) {
@@ -5120,7 +5219,7 @@ ${osRows ? `
           const pecaSelect = document.getElementById('osPecaSelect');
           pecaSelect.innerHTML = '<option value="">-- Escolher Peça --</option>' +
             App.state.produtos
-              .filter(p => (p.quantidade_estoque||0) > 0 && p.ativo)
+              .filter(p => (p.quantidade_estoque||0) > 0 && p.ativo && !p.descontinuado)
               .map(p => `<option value="${p.id}">${App.utils.escapeHTML(p.descricao)} (${p.quantidade_estoque} un) - R$ ${money.formatBR(p.preco_venda)}</option>`)
               .join('');
 
@@ -5329,6 +5428,9 @@ ${osRows ? `
           if (!os) { App.ui.mostrarToast('OS não encontrada. Tente fechar e abrir o modal novamente.','erro'); return; }
           const cfg = App.state.configuracoes;
           const pa  = document.getElementById('print-area');
+          // Limpar SEMPRE antes de preencher para evitar conteúdo duplicado
+          pa.innerHTML = '';
+          pa.classList.add('hidden');
           if (formato === 'TERMICA') {
             pa.innerHTML = tipo === 'OS' ? this._htmlOSTermica(os,cfg) : this._htmlReciboTermica(os,cfg);
           } else {
@@ -5336,7 +5438,24 @@ ${osRows ? `
           }
           pa.classList.remove('hidden');
           this.fecharModalPrint();
-          setTimeout(() => window.print(), 150);
+          // Aguarda renderização das imagens antes de imprimir
+          const imgs = pa.querySelectorAll('img');
+          if (imgs.length > 0) {
+            let carregadas = 0;
+            const total = imgs.length;
+            const tentar = () => {
+              carregadas++;
+              if (carregadas >= total) window.print();
+            };
+            imgs.forEach(img => {
+              if (img.complete) tentar();
+              else { img.onload = tentar; img.onerror = tentar; }
+            });
+            // Fallback: imprime após 2s mesmo se imagem não carregar
+            setTimeout(() => window.print(), 2000);
+          } else {
+            setTimeout(() => window.print(), 150);
+          }
         },
 
         // ── TEMPLATES TÉRMICOS (58mm / 80mm) ─────────────────────────
@@ -5669,6 +5788,23 @@ ${osRows ? `
                 <div style="font-size:11px;color:#94a3b8;margin-top:4px">${os.formaPagamento||''}</div>
               </div>
             </div>
+
+            <!-- FOTOS DA OS -->
+            ${(() => {
+              const f = os.fotos || {};
+              const imgs = [['Antes', f.antes], ['Depois', f.depois], ['Extra', f.extra]].filter(([, src]) => src);
+              if (!imgs.length) return '';
+              return `<div style="padding:0 32px 20px">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:8px">📸 Registro Fotográfico</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                  ${imgs.map(([leg, src]) => `
+                    <div style="flex:1;min-width:160px;text-align:center">
+                      <img src="${src}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0">
+                      <div style="font-size:10px;color:#64748b;margin-top:4px;font-weight:700;text-transform:uppercase">${leg}</div>
+                    </div>`).join('')}
+                </div>
+              </div>`;
+            })()}
 
             <!-- ASSINATURAS -->
             <div style="padding:20px 32px 24px;border-top:1px solid #e2e8f0;display:grid;grid-template-columns:1fr 1fr;gap:40px">
@@ -6977,7 +7113,7 @@ ${tl.length?`<!-- Timeline -->
 
         filtrarCatalogo() {
           const termo = (document.getElementById('buscaPDV').value||'').toLowerCase();
-          const filt  = App.state.produtos.filter(p => (p.descricao||'').toLowerCase().includes(termo) && p.ativo);
+          const filt  = App.state.produtos.filter(p => (p.descricao||'').toLowerCase().includes(termo) && p.ativo && !p.descontinuado);
           document.getElementById('catalogoPDV').innerHTML = filt.map(p => `
             <div class="bg-slate-900 p-3 rounded border border-slate-700 hover:border-blue-500 cursor-pointer transition ${(p.quantidade_estoque||0)<=0?'opacity-50 pointer-events-none':''}"
                 onclick="App.pdv.adicionarAoCarrinho('${p.id}')">
@@ -7606,7 +7742,7 @@ ${tl.length?`<!-- Timeline -->
 
         window.addEventListener('afterprint', () => {
           const pa = document.getElementById('print-area');
-          if (pa) { pa.classList.add('hidden'); pa.innerHTML = ''; }
+          if (pa) { pa.innerHTML = ''; pa.classList.add('hidden'); }
         });
 
         const debounce = (fn, ms=300) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
