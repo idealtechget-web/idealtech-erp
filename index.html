@@ -811,12 +811,25 @@
 
           <div class="mb-4">
             <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">Forma de Pagamento</label>
-            <select id="pdvFormaPagamento" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none">
+            <select id="pdvFormaPagamento" onchange="App.ui.toggleParcelas('pdv')" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none">
               <option value="Dinheiro">💵 Dinheiro</option>
               <option value="Pix" selected>📱 Pix</option>
               <option value="Cartão">💳 Cartão</option>
               <option value="Boleto">🏦 Boleto</option>
+              <option value="Depósito">🏦 Depósito</option>
             </select>
+            <div id="pdvParcelas" class="hidden mt-2">
+              <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">Parcelas</label>
+              <select id="pdvParcelasQtd" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none text-sm">
+                <option value="1">1x (à vista)</option>
+                <option value="2">2x</option><option value="3">3x</option>
+                <option value="4">4x</option><option value="5">5x</option>
+                <option value="6">6x</option><option value="7">7x</option>
+                <option value="8">8x</option><option value="9">9x</option>
+                <option value="10">10x</option><option value="11">11x</option>
+                <option value="12">12x</option>
+              </select>
+            </div>
           </div>
           <div class="mb-4">
             <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">🏦 Conta Bancária</label>
@@ -1254,11 +1267,25 @@
 
         <div>
           <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">Forma de Pagamento</label>
-          <select id="osFormaPagamento" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none">
+          <select id="osFormaPagamento" onchange="App.ui.toggleParcelas('os')" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none">
             <option value="Dinheiro">💵 Dinheiro</option>
             <option value="Pix">📱 Pix</option>
             <option value="Cartão">💳 Cartão</option>
+            <option value="Boleto">🏦 Boleto</option>
+            <option value="Depósito">🏦 Depósito</option>
           </select>
+          <div id="osParcelas" class="hidden mt-2">
+            <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">Parcelas do Cartão</label>
+            <select id="osParcelasQtd" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none text-sm">
+              <option value="1">1x (à vista)</option>
+              <option value="2">2x</option><option value="3">3x</option>
+              <option value="4">4x</option><option value="5">5x</option>
+              <option value="6">6x</option><option value="7">7x</option>
+              <option value="8">8x</option><option value="9">9x</option>
+              <option value="10">10x</option><option value="11">11x</option>
+              <option value="12">12x</option>
+            </select>
+          </div>
         </div>
 
         <!-- Dados Fiscais NFS-e (opcionais) -->
@@ -1440,12 +1467,30 @@
         </div>
         <input type="text" id="receitaValor" placeholder="Valor (R$)" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none money">
         <input type="date" id="receitaData" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
-        <select id="receitaFormaPagamento" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
+        <select id="receitaFormaPagamento" onchange="App.ui.toggleParcelas('receita')" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
           <option value="Dinheiro">💵 Dinheiro</option>
           <option value="Pix">📱 Pix</option>
           <option value="Cartão">💳 Cartão</option>
           <option value="Boleto">🏦 Boleto</option>
+          <option value="Depósito">🏦 Depósito</option>
         </select>
+        <div id="receitaParcelas" class="hidden">
+          <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">Parcelas</label>
+          <select id="receitaParcelasQtd" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none text-sm">
+            <option value="1">1x (à vista)</option>
+            <option value="2">2x</option><option value="3">3x</option>
+            <option value="4">4x</option><option value="5">5x</option>
+            <option value="6">6x</option><option value="7">7x</option>
+            <option value="8">8x</option><option value="9">9x</option>
+            <option value="10">10x</option><option value="11">11x</option>
+            <option value="12">12x</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">💸 Taxa/Desconto (R$) <span class="text-slate-600 font-normal normal-case">opcional</span></label>
+          <input type="text" id="receitaTaxa" placeholder="Ex: 0,99" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none money text-sm">
+          <p class="text-xs text-slate-600 mt-1">Será descontado do valor recebido. Ex: taxa webhook, transferência.</p>
+        </div>
         <div>
           <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">🏦 Conta Bancária</label>
           <select id="receitaContaId" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none">
@@ -1651,12 +1696,24 @@
           </div>
           <div>
             <label class="text-slate-400 text-xs font-bold uppercase mb-1 block">Forma de Pagamento</label>
-            <select id="orcFormaPagamento" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none">
+            <select id="orcFormaPagamento" onchange="App.ui.toggleParcelas('orc')" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none">
               <option value="Dinheiro">💵 Dinheiro</option>
               <option value="Pix">📱 Pix</option>
               <option value="Cartão">💳 Cartão</option>
               <option value="Boleto">🏦 Boleto</option>
+              <option value="Depósito">🏦 Depósito</option>
             </select>
+            <div id="orcParcelas" class="hidden mt-1">
+              <select id="orcParcelasQtd" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none text-sm mt-1">
+                <option value="1">1x (à vista)</option>
+                <option value="2">2x</option><option value="3">3x</option>
+                <option value="4">4x</option><option value="5">5x</option>
+                <option value="6">6x</option><option value="7">7x</option>
+                <option value="8">8x</option><option value="9">9x</option>
+                <option value="10">10x</option><option value="11">11x</option>
+                <option value="12">12x</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -2425,6 +2482,13 @@
         toggleNfCampos(ctx) {
           const chk = document.getElementById(`${ctx}TemNF`).checked;
           document.getElementById(`${ctx}CamposNF`).classList.toggle('hidden', !chk);
+        },
+
+        toggleParcelas(ctx) {
+          const sel = document.getElementById(`${ctx}FormaPagamento`);
+          const box = document.getElementById(`${ctx}Parcelas`);
+          if (!sel || !box) return;
+          box.classList.toggle('hidden', sel.value !== 'Cartão');
         },
 
         atualizarContadorBusca(inputId, countId, total) {
@@ -5242,6 +5306,11 @@ ${osRows ? `
             document.getElementById('osLaudo').value               = os.laudo    || '';
             document.getElementById('osLaudoRelatorio').value       = os.laudoRelatorio || '';
             document.getElementById('osFormaPagamento').value      = os.formaPagamento || 'Pix';
+            App.ui.toggleParcelas('os');
+            if (os.parcelas && os.parcelas > 1) {
+              const pqEl = document.getElementById('osParcelasQtd');
+              if (pqEl) pqEl.value = String(os.parcelas);
+            }
             document.getElementById('osPrevisao').value               = os.previsao || '';
             document.getElementById('osNovaAtualizacao').value        = '';
             App.os._renderHistoricoAtualizacoes(os.atualizacoes||[]);
@@ -6068,7 +6137,10 @@ ${osRows ? `
             servicos:        App.state.tempServicosOS.map(s => ({ ...s, preco: Number(s.preco||0) })),
             total,
             data:            new Date().toISOString().slice(0,10),
-            formaPagamento:  document.getElementById('osFormaPagamento').value
+            formaPagamento:  document.getElementById('osFormaPagamento').value,
+            parcelas:        document.getElementById('osFormaPagamento').value === 'Cartão'
+                               ? parseInt(document.getElementById('osParcelasQtd')?.value||'1', 10)
+                               : 1,
           };
 
           // Fotos
@@ -7322,6 +7394,11 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaObs').value                  = r.obs || '';
             document.getElementById('receitaAporte').checked             = !!r.aporte;
             document.getElementById('receitaContaId').value              = r.contaId || '';
+            App.ui.toggleParcelas('receita');
+            if (document.getElementById('receitaParcelasQtd') && r.parcelas > 1)
+              document.getElementById('receitaParcelasQtd').value = String(r.parcelas);
+            if (document.getElementById('receitaTaxa'))
+              document.getElementById('receitaTaxa').value = r.taxa > 0 ? money.formatBR(r.taxa) : '';
             document.getElementById('receitaCategoriaId').value         = r.categoriaId || '';
             App.ui.toggleNfCampos('receita');
             if (r.nf_emitida) {
@@ -7345,6 +7422,9 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaRecebido').checked     = true;
             document.getElementById('receitaAporte').checked       = false;
             document.getElementById('receitaFormaPagamento').value = 'Pix';
+            App.ui.toggleParcelas('receita');
+            if (document.getElementById('receitaParcelasQtd')) document.getElementById('receitaParcelasQtd').value = '1';
+            if (document.getElementById('receitaTaxa')) document.getElementById('receitaTaxa').value = '';
             document.getElementById('receitaObs').value              = '';
             document.getElementById('receitaContaId').value         = '';
             document.getElementById('receitaCategoriaId').value    = '';
@@ -7387,8 +7467,12 @@ ${tl.length?`<!-- Timeline -->
               nf_tipo:        temNF ? (document.getElementById('receitaTipoNF')?.value||'NFe') : null,
               nf_numero:      temNF ? document.getElementById('receitaNumNF').value.trim() : null,
               origem:         'Manual',
-              aporte:         document.getElementById('receitaAporte')?.checked || false
+              aporte:         document.getElementById('receitaAporte')?.checked || false,
+              parcelas:       forma === 'Cartão' ? parseInt(document.getElementById('receitaParcelasQtd')?.value||'1', 10) : 1,
+              taxa:           money.parseBR(document.getElementById('receitaTaxa')?.value||'0'),
             };
+            // Aplica taxa: desconta do valor registrado
+            if (base.taxa > 0) base.valor = Math.max(0, base.valor - base.taxa);
 
             let rec;
             if (idH) {
@@ -7602,7 +7686,7 @@ ${tl.length?`<!-- Timeline -->
                   <div class="text-xs text-slate-400 mt-1 flex gap-2 items-center flex-wrap">
                     <span>📅 ${App.utils.formatarData(r.data)}</span>
                     <span class="status-badge ${r.status==='recebido'?'status-pago':'status-pendente'}">${r.status==='recebido'?'Pago':'Pendente'}</span>
-                    <span class="text-xs bg-slate-700 px-2 py-0.5 rounded">${r.formaPagamento||'Pix'}</span>
+                    <span class="text-xs bg-slate-700 px-2 py-0.5 rounded">${r.formaPagamento||'Pix'}${r.parcelas > 1 ? ` ${r.parcelas}x` : ''}</span>
                     ${r.aporte ? '<span class="bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded font-bold">💰 Aporte</span>' : ''}
                     ${r.nf_emitida ? `<span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">${r.nf_tipo||'NFe'} ${App.utils.escapeHTML(r.nf_numero||'S/N')}</span>` : ''}
                     ${r.obs ? `<span class="text-slate-400 italic text-xs">💬 ${App.utils.escapeHTML(r.obs)}</span>` : ''}
