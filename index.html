@@ -23,11 +23,7 @@
     .sidebar-item:hover { background: #1e293b; color: #e2e8f0; }
     .sidebar-item.ativo  { background: #1d4ed8; color: #fff; }
 
-    @media print {
-      #sidebar, #sidebarOverlay, .topbar-mobile { display: none !important; }
-      #app { display: block !important; }
-      .flex-1.flex.flex-col { display: block !important; }
-    }
+    /* print gerenciado pelo bloco @media print principal abaixo */
     /* Forçar maiúsculo em campos de texto */
     #modalOS input[type="text"], #modalOS textarea:not(#osLaudoRelatorio),
     #modalOrcamento input[type="text"],
@@ -135,10 +131,7 @@
       #main-content { margin-left: 0 !important; padding-top: 56px; }
       #btn-menu-mobile { display: flex; }
     }
-    @media print {
-      #sidebar, #sidebar-overlay, #btn-menu-mobile { display: none !important; }
-      #main-content { margin-left: 0 !important; }
-    }
+    /* print gerenciado pelo bloco @media print principal abaixo */
 
     .card-item { animation: fadeInUp 0.3s ease-out; transition: all 0.2s ease; }
     .card-item:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); }
@@ -161,7 +154,13 @@
     @media print {
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       @page { size: A4; margin: 8mm 10mm; }
+      /* Esconde TUDO — sidebar, app, modais, overlays */
       body > * { display: none !important; }
+      #sidebar { display: none !important; }
+      #app { display: none !important; }
+      #sidebarOverlay { display: none !important; }
+      #btnMenuMobile { display: none !important; }
+      /* Mostra apenas a área de impressão */
       #print-area { display: block !important; visibility: visible !important;
         position: fixed !important; inset: 0 !important;
         background: white !important; z-index: 99999 !important;
