@@ -8025,6 +8025,35 @@ ${tl.length?`<!-- Timeline -->
           }
         },
 
+        async gerarProxima(id) {
+          const ct = App.state.contratos?.find(x => String(x.id) === String(id));
+          if (!ct) return;
+          if (ct.status !== 'ativo') { App.ui.mostrarToast('Contrato não está ativo!','erro'); return; }
+          // Verifica se já existe parcela pendente para este contrato
+          const jaExiste = App.state.recebimentos.some(r =>
+            r.contratoId === ct.id && r.status === 'pendente'
+          ) || App.state.gastos.some(g =>
+            g.contratoId === ct.id && g.status === 'pendente'
+          );
+          if (jaExiste) {
+            App.ui.mostrarToast('Já existe uma parcela pendente para este contrato!','erro');
+            return;
+          }
+          if (!confirm('Gerar próxima parcela agora?')) return;
+          App.ui.mostrarLoading();
+          try {
+            await this._gerarParcela(ct);
+            App.financeiro.renderizar();
+            App.dashboard.atualizar();
+            this.renderizar();
+            App.ui.mostrarToast('Parcela gerada com sucesso!','sucesso');
+          } catch(e) {
+            App.ui.mostrarToast('Erro: ' + e.message,'erro');
+          } finally {
+            App.ui.esconderLoading();
+          }
+        },
+
         async pausar(id) {
           const ct = App.state.contratos?.find(x => String(x.id) === String(id));
           if (!ct) return;
@@ -8139,6 +8168,9 @@ ${tl.length?`<!-- Timeline -->
 
                 <div class="flex gap-2 pt-2 border-t border-slate-700 flex-wrap">
                   <button onclick="App.contratos.abrirModal('${ct.id}')" class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded font-bold transition">✏️ Editar</button>
+                  ${ct.status === 'ativo' ? `
+                    <button onclick="App.contratos.gerarProxima('${ct.id}')" class="text-xs bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded font-bold transition" title="Gerar próxima parcela manualmente">▶ Próxima</button>
+                  ` : ''}
                   ${ct.status !== 'encerrado' ? `
                     <button onclick="App.contratos.pausar('${ct.id}')" class="text-xs ${ct.status==='pausado'?'bg-green-700 hover:bg-green-600':'bg-yellow-700 hover:bg-yellow-600'} text-white px-3 py-1.5 rounded font-bold transition">
                       ${ct.status==='pausado'?'▶️ Reativar':'⏸️ Pausar'}
