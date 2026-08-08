@@ -8792,6 +8792,7 @@ ${tl.length?`<!-- Timeline -->
         nf_emitida: x.nf_emitida, nf_tipo: x.nf_tipo, nf_numero: x.nf_numero,
         recorrente: x.recorrente, recorrenteTipo: x.recorrente_tipo,
         recorrenteParcelas: x.recorrente_parcelas, recorrenteId: x.recorrente_id,
+        contratoId: x.contrato_id ? String(x.contrato_id) : null,
       })),
 
       _normReceita: (arr) => (arr||[]).map(x => ({
@@ -8803,6 +8804,11 @@ ${tl.length?`<!-- Timeline -->
         categoriaId: x.categoria_id ? String(x.categoria_id) : null,
         nf_emitida: x.nf_emitida, nf_tipo: x.nf_tipo, nf_numero: x.nf_numero,
         origem: x.origem,
+        contratoId: x.contrato_id ? String(x.contrato_id) : null,
+        recorrente: x.recorrente || false,
+        aporte:     x.aporte || false,
+        parcelas:   x.parcelas || 1,
+        taxa:       x.taxa || 0,
       })),
 
       _normConta: (arr) => (arr||[]).map(x => ({
@@ -8918,7 +8924,12 @@ ${tl.length?`<!-- Timeline -->
           status: r.status||'pendente', forma_pagamento: r.formaPagamento||'Pix',
           conta_id: r.contaId||null, categoria_id: r.categoriaId||null,
           nf_emitida: r.nf_emitida||false, nf_tipo: r.nf_tipo||'NFe',
-          nf_numero: r.nf_numero||'', obs: r.obs||'', origem: r.origem||'manual' };
+          nf_numero: r.nf_numero||'', obs: r.obs||'', origem: r.origem||'manual',
+          contrato_id: r.contratoId||null,
+          recorrente:  r.recorrente||false,
+          aporte:      r.aporte||false,
+          parcelas:    r.parcelas||1,
+          taxa:        r.taxa||0 };
         if (r.id && !r.id.startsWith('tmp_')) {
           const { data } = await supa.from('receitas').update(row).eq('id', r.id).eq('user_id', uid).select().single();
           return data;
@@ -8942,7 +8953,8 @@ ${tl.length?`<!-- Timeline -->
           nf_emitida: g.nf_emitida||false, nf_tipo: g.nf_tipo||'NFe',
           nf_numero: g.nf_numero||'', obs: g.obs||'',
           recorrente: g.recorrente||false, recorrente_tipo: g.recorrenteTipo||'',
-          recorrente_parcelas: g.recorrenteParcelas||0, recorrente_id: g.recorrenteId||'' };
+          recorrente_parcelas: g.recorrenteParcelas||0, recorrente_id: g.recorrenteId||'',
+          contrato_id: g.contratoId||null };
         if (g.id && !g.id.startsWith('tmp_')) {
           const { data } = await supa.from('despesas').update(row).eq('id', g.id).eq('user_id', uid).select().single();
           return data;
