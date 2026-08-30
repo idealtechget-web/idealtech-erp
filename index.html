@@ -2432,6 +2432,17 @@
           return c ? c.nome : '';
         },
 
+        getClienteDoc(id, nomeCliente) {
+          // Busca por id ou por nome
+          const c = id
+            ? App.state.clientes.find(x => String(x.id) === String(id))
+            : App.state.clientes.find(x => x.nome === nomeCliente);
+          if (!c) return '';
+          if (c.cnpj) return `CNPJ: ${cnpjUtils.format(c.cnpj)}`;
+          if (c.cpf)  return `CPF: ${App.utils.escapeHTML(c.cpf)}`;
+          return '';
+        },
+
         popularSelectCategorias(selIds=[], tipo='') {
           const cats = App.state.categorias.filter(c => !tipo || c.tipo === tipo);
           const mkOpts = (t) => '<option value="">— Sem categoria —</option>' +
@@ -3741,7 +3752,7 @@ Importar como Receita no Financeiro?`)) return;
               document.getElementById('clienteNome').value     = c.nome     || '';
               document.getElementById('clienteTelefone').value = c.telefone || '';
               document.getElementById('clienteObs').value      = c.obs      || '';
-              if (c.cnpj) {
+              if (c.cnpj || c.tipo === 'PJ') {
                 document.getElementById('clienteTipoPJ').checked = true;
                 document.getElementById('clientePJFields').classList.remove('hidden');
                 document.getElementById('clienteCnpj').value        = cnpjUtils.format(c.cnpj) || '';
@@ -3903,9 +3914,17 @@ Importar como Receita no Financeiro?`)) return;
                   </div>
                   <div class="text-xs text-slate-400">${App.utils.escapeHTML(c.telefone || 'Sem telefone')}</div>
                   ${cnpjInfo}${cpfInfo}${endPF}
+                  ${(c.cnpj||c.cpf) ? `
+                  <div class="mt-1">
+                    <button onclick="navigator.clipboard.writeText('${(c.cnpj||c.cpf||'').replace(/\D/g,'')}').then(()=>App.ui.mostrarToast('Documento copiado!','sucesso'))"
+                      class="text-xs bg-slate-700 hover:bg-blue-700 text-slate-300 hover:text-white px-2 py-0.5 rounded transition font-mono">
+                      📋 Copiar ${c.cnpj ? 'CNPJ' : 'CPF'}
+                    </button>
+                  </div>` : ''}
                   ${c.obs ? `<div class="text-xs text-slate-500">Obs: ${App.utils.escapeHTML(c.obs)}</div>` : ''}
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center">
+                  ${(c.cnpj||c.cpf) ? `<button onclick="navigator.clipboard.writeText('${c.cnpj||c.cpf}').then(()=>App.ui.mostrarToast('Documento copiado!','sucesso'))" class="text-slate-400 hover:text-white text-xs bg-slate-700 px-2 py-1 rounded transition" title="Copiar ${c.cnpj?'CNPJ':'CPF'}">📋</button>` : ''}
                   <button onclick="App.clientes.abrirModal('${c.id}')" class="text-blue-400 hover:text-blue-300" title="Editar">✏️</button>
                   <button onclick="App.clientes.verHistorico('${c.id}')" class="text-green-400 hover:text-green-300" title="Histórico">📜</button>
                   <button onclick="App.clientes.inativar('${c.id}')" class="${inativo?'text-emerald-400 hover:text-emerald-300':'text-yellow-400 hover:text-yellow-300'}" title="${inativo?'Reativar':'Inativar'}">${inativo?'✅':'🚫'}</button>
@@ -6165,7 +6184,9 @@ ${osRows ? `
             cliente:         clienteNovo || App.utils.getClienteNome(clienteSel) || 'Avulso',
             clienteId:       clienteSel || null,
             clienteTelefone: clienteObj?.telefone || '',
-            clienteDocumento: clienteObj?.cnpj ? `CNPJ: ${clienteObj.cnpj}` : (clienteObj?.cpf ? `CPF: ${clienteObj.cpf}` : ''),
+            clienteDocumento: clienteObj?.cnpj
+              ? `CNPJ: ${cnpjUtils.format(clienteObj.cnpj)}`
+              : (clienteObj?.cpf ? `CPF: ${clienteObj.cpf}` : ''),
             clienteEmail:    clienteObj?.email || '',
             clienteEndereco: clienteObj?.logradouro ? `${clienteObj.logradouro}, ${clienteObj.numero||'S/N'} — ${clienteObj.cidade||''}/${clienteObj.uf||''}` :
                              clienteObj?.logradouroPF ? `${clienteObj.logradouroPF}, ${clienteObj.numeroPF||'S/N'} — ${clienteObj.cidadePF||''}/${clienteObj.ufPF||''}` : '',
@@ -7080,6 +7101,7 @@ ${tl.length?`<!-- Timeline -->
                   <h3 class="font-bold text-white text-xl truncate">${App.utils.escapeHTML(os.cliente)}</h3>
                   ${App.os._tipoBadge(os.tipo)}
                 </div>
+                ${(() => { const doc = App.utils.getClienteDoc(os.clienteId, os.cliente); return doc ? `<div class="text-xs text-blue-400 font-mono mb-1">${doc}</div>` : ''; })()}
                 <p class="text-sm text-slate-400 truncate mb-2">${App.utils.escapeHTML(App.os._tipoReferencia(os))}</p>
                 <p class="text-xs text-slate-500 mb-4">📅 ${App.utils.formatarData(os.data)}${os.fotos&&(os.fotos.antes||os.fotos.depois||os.fotos.extra)?' <span class="text-yellow-500">📷</span>':''}</p>
                 <div class="mt-auto pt-4 border-t border-slate-700 flex justify-between items-center">
@@ -7434,6 +7456,9 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaTemNF').checked           = !!r.nf_emitida;
             document.getElementById('receitaRecebido').checked        = r.status === 'recebido';
             document.getElementById('receitaFormaPagamento').value    = r.formaPagamento || 'Pix';
+            // Mostra valorBruto se existir (valor antes da taxa), senão soma valor + taxa
+            const vBruto = r.valorBruto || (r.valor + (r.taxa||0));
+            document.getElementById('receitaValor').value               = money.formatBR(vBruto);
             document.getElementById('receitaObs').value                  = r.obs || '';
             document.getElementById('receitaAporte').checked             = !!r.aporte;
             document.getElementById('receitaContaId').value              = r.contaId || '';
@@ -7499,6 +7524,7 @@ ${tl.length?`<!-- Timeline -->
             let xmlSaved = null;
             if (temNF) xmlSaved = await App.utils.lerArquivoXML('receitaXmlNF');
 
+            const taxa = money.parseBR(document.getElementById('receitaTaxa')?.value||'0');
             const base = {
               cliente:        clienteNovo || App.utils.getClienteNome(clienteSel) || 'Avulso',
               clienteId:      clienteSel || null,
@@ -7512,10 +7538,11 @@ ${tl.length?`<!-- Timeline -->
               origem:         'Manual',
               aporte:         document.getElementById('receitaAporte')?.checked || false,
               parcelas:       forma === 'Cartão' ? parseInt(document.getElementById('receitaParcelasQtd')?.value||'1', 10) : 1,
-              taxa:           money.parseBR(document.getElementById('receitaTaxa')?.value||'0'),
+              taxa:           taxa,
+              valorBruto:     valor, // guarda o valor original antes da taxa
             };
-            // Aplica taxa: desconta do valor registrado
-            if (base.taxa > 0) base.valor = Math.max(0, base.valor - base.taxa);
+            // Aplica taxa APENAS em registros novos (edição já tem valor líquido)
+            if (!idH && taxa > 0) base.valor = Math.max(0, valor - taxa);
 
             let rec;
             if (idH) {
@@ -7734,6 +7761,7 @@ ${tl.length?`<!-- Timeline -->
                   <div class="font-bold text-white text-base">${App.utils.escapeHTML(r.cliente)}
                     <span class="text-xs text-slate-400 font-normal">(${App.utils.escapeHTML(r.descricao)})</span>
                   </div>
+                  ${(() => { const doc = App.utils.getClienteDoc(r.clienteId, r.cliente); return doc ? `<div class="text-xs text-blue-400 font-mono mt-0.5">${doc}</div>` : ''; })()}
                   <div class="text-xs text-slate-400 mt-1 flex gap-2 items-center flex-wrap">
                     <span>📅 ${App.utils.formatarData(r.data)}</span>
                     <span class="status-badge ${r.status==='recebido'?'status-pago':'status-pendente'}">${r.status==='recebido'?'Pago':'Pendente'}</span>
@@ -8142,6 +8170,7 @@ ${tl.length?`<!-- Timeline -->
                       ${statusBadge[ct.status]||''}
                     </div>
                     ${ct.cliente ? `<div class="text-xs text-slate-400 mt-1">👤 ${App.utils.escapeHTML(ct.cliente)}</div>` : ''}
+                    ${(() => { const doc = App.utils.getClienteDoc(ct.clienteId, ct.cliente); return doc ? `<div class="text-xs text-blue-400 font-mono">${doc}</div>` : ''; })()}
                   </div>
                   <div class="text-right ml-3">
                     <div class="font-bold text-xl ${tipoCor}">R$ ${fmt(ct.valor)}</div>
@@ -8841,6 +8870,7 @@ ${tl.length?`<!-- Timeline -->
         aporte:     x.aporte || false,
         parcelas:   x.parcelas || 1,
         taxa:       x.taxa || 0,
+        valorBruto: x.valor_bruto || x.valor || 0,
       })),
 
       _normConta: (arr) => (arr||[]).map(x => ({
@@ -8961,7 +8991,8 @@ ${tl.length?`<!-- Timeline -->
           recorrente:  r.recorrente||false,
           aporte:      r.aporte||false,
           parcelas:    r.parcelas||1,
-          taxa:        r.taxa||0 };
+          taxa:        r.taxa||0,
+          valor_bruto: r.valorBruto||r.valor||0 };
         if (r.id && !r.id.startsWith('tmp_')) {
           const { data } = await supa.from('receitas').update(row).eq('id', r.id).eq('user_id', uid).select().single();
           return data;
