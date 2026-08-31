@@ -7541,8 +7541,8 @@ ${tl.length?`<!-- Timeline -->
               taxa:           taxa,
               valorBruto:     valor, // guarda o valor original antes da taxa
             };
-            // Aplica taxa APENAS em registros novos (edição já tem valor líquido)
-            if (!idH && taxa > 0) base.valor = Math.max(0, valor - taxa);
+            // Aplica taxa sempre que houver taxa — o campo valor sempre mostra o bruto
+            if (taxa > 0) base.valor = Math.max(0, valor - taxa);
 
             let rec;
             if (idH) {
