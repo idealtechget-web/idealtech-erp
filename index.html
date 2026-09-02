@@ -1059,6 +1059,29 @@
         <h3 class="text-lg font-bold text-white mb-3">📊 Top Serviços Realizados</h3>
         <div id="relTopServicos" class="bg-slate-900 p-3 rounded-lg max-h-60 overflow-auto"></div>
       </div>
+
+      <!-- RELATÓRIO MEI / DASN -->
+      <div class="bg-slate-800 rounded-xl p-5 border border-slate-700 mt-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
+          <div>
+            <h2 class="text-xl font-bold text-white">🏛️ Relatório MEI — DASN-SIMEI</h2>
+            <p class="text-slate-400 text-sm mt-1">Receita bruta anual separada por NF emitida e sem NF, para preenchimento da declaração.</p>
+          </div>
+          <div class="flex gap-2 flex-wrap items-center">
+            <select id="dasnAno" onchange="App.relatorios.gerarDASN()" class="px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none text-sm"></select>
+            <button onclick="App.relatorios.exportarDASNExcel()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded font-bold transition text-sm">📊 Excel</button>
+            <button onclick="App.relatorios.imprimirDASN()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded font-bold transition text-sm">🖨️ PDF</button>
+          </div>
+        </div>
+
+        <!-- KPIs anuais -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5" id="dasnKpis"></div>
+
+        <!-- Tabela mensal -->
+        <div id="dasnTabela" class="overflow-x-auto"></div>
+
+        <p class="text-slate-600 text-xs mt-3">* Receitas marcadas como "Aporte de Capital" não são incluídas. Apenas receitas com status "Recebido".</p>
+      </div>
     </div>
 
     <!-- CLIENTES -->
@@ -3072,7 +3095,7 @@
           if (id === 'contratos')  { App.contratos.renderizar(); App.utils.popularSelectContas(['contratoContaId']); }
           if (id === 'dre')        App.dre.init();
           if (id === 'clientes')   App.clientes.renderizar();
-          if (id === 'relatorios') App.relatorios.carregarPadrao();
+          if (id === 'relatorios') { App.relatorios.carregarPadrao(); App.relatorios._initDASN(); }
           if (id === 'dashboard')  App.contas.renderizar();
         }
       },
@@ -5271,6 +5294,214 @@ ${osRows ? `
           } else {
             App.ui.mostrarToast('Permita pop-ups para abrir o relatório PDF','erro');
           }
+        },
+
+        // ── RELATÓRIO MEI / DASN ──────────────────────────────────
+        _initDASN() {
+          const sel = document.getElementById('dasnAno');
+          if (!sel || sel.options.length > 1) return;
+          const anos = [...new Set([
+            ...App.state.recebimentos.map(r => (r.data||'').slice(0,4)),
+            String(new Date().getFullYear())
+          ])].filter(Boolean).sort((a,b) => b-a);
+          sel.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+          this.gerarDASN();
+        },
+
+        gerarDASN() {
+          const ano  = document.getElementById('dasnAno')?.value || String(new Date().getFullYear());
+          const fmt  = App.utils.formatarMoeda.bind(App.utils);
+          const mesesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                             'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+          // Filtra receitas do ano — só recebidas, sem aportes
+          const recs = App.state.recebimentos.filter(r =>
+            (r.data||'').startsWith(ano) &&
+            r.status === 'recebido' &&
+            !r.aporte &&
+            r.origem !== 'TRANSFERENCIA'
+          );
+
+          // Totais anuais
+          const totalComNF  = recs.filter(r => r.nf_emitida).reduce((a,b) => a + Number(b.valor||0), 0);
+          const totalSemNF  = recs.filter(r => !r.nf_emitida).reduce((a,b) => a + Number(b.valor||0), 0);
+          const totalNFe    = recs.filter(r => r.nf_emitida && r.nf_tipo === 'NFe').reduce((a,b) => a + Number(b.valor||0), 0);
+          const totalNFSe   = recs.filter(r => r.nf_emitida && r.nf_tipo === 'NFSe').reduce((a,b) => a + Number(b.valor||0), 0);
+          const totalGeral  = totalComNF + totalSemNF;
+          const limiteMEI   = App.config.limiteMEI || 81000;
+          const percUsado   = totalGeral > 0 ? ((totalGeral/limiteMEI)*100).toFixed(1) : '0.0';
+
+          // KPIs
+          const kpisEl = document.getElementById('dasnKpis');
+          if (kpisEl) kpisEl.innerHTML = [
+            { label: 'Receita Total', val: totalGeral, cor: 'text-white' },
+            { label: 'Com Nota Fiscal', val: totalComNF, cor: 'text-blue-400' },
+            { label: 'Sem Nota Fiscal', val: totalSemNF, cor: 'text-yellow-400' },
+            { label: `Limite MEI (${percUsado}%)`, val: limiteMEI - totalGeral, cor: totalGeral > limiteMEI*0.9 ? 'text-red-400' : 'text-green-400', label2: 'Disponível' },
+          ].map(k => `
+            <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
+              <p class="text-xs text-slate-500 font-bold uppercase mb-1">${k.label2||k.label}</p>
+              <p class="text-xl font-black ${k.cor}">R$ ${fmt(k.val)}</p>
+              ${k.label2 ? `<p class="text-xs text-slate-600 mt-0.5">${k.label}</p>` : ''}
+            </div>`).join('');
+
+          // Dados mensais
+          const dados = Array.from({length:12}, (_,i) => {
+            const ms   = `${ano}-${String(i+1).padStart(2,'0')}`;
+            const mes  = recs.filter(r => (r.data||'').startsWith(ms));
+            const comNF  = mes.filter(r => r.nf_emitida).reduce((a,b) => a + Number(b.valor||0), 0);
+            const semNF  = mes.filter(r => !r.nf_emitida).reduce((a,b) => a + Number(b.valor||0), 0);
+            const nfe    = mes.filter(r => r.nf_emitida && r.nf_tipo === 'NFe').reduce((a,b) => a + Number(b.valor||0), 0);
+            const nfse   = mes.filter(r => r.nf_emitida && r.nf_tipo === 'NFSe').reduce((a,b) => a + Number(b.valor||0), 0);
+            const total  = comNF + semNF;
+            const qtdNF  = mes.filter(r => r.nf_emitida).length;
+            const qtdSem = mes.filter(r => !r.nf_emitida).length;
+            return { ms, nome: mesesNome[i], comNF, semNF, nfe, nfse, total, qtdNF, qtdSem };
+          });
+
+          const tabelaEl = document.getElementById('dasnTabela');
+          if (!tabelaEl) return;
+
+          tabelaEl.innerHTML = `
+            <table class="w-full border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-900">
+                  <th class="text-left px-3 py-2 text-slate-400 text-xs font-bold uppercase">Mês</th>
+                  <th class="text-right px-3 py-2 text-slate-400 text-xs font-bold uppercase">Com NF<br><span class="text-slate-600 font-normal normal-case">(NFe + NFSe)</span></th>
+                  <th class="text-right px-3 py-2 text-slate-400 text-xs font-bold uppercase">NFe<br><span class="text-slate-600 font-normal normal-case">Produtos</span></th>
+                  <th class="text-right px-3 py-2 text-slate-400 text-xs font-bold uppercase">NFSe<br><span class="text-slate-600 font-normal normal-case">Serviços</span></th>
+                  <th class="text-right px-3 py-2 text-slate-400 text-xs font-bold uppercase">Sem NF</th>
+                  <th class="text-right px-3 py-2 text-slate-400 text-xs font-bold uppercase">Total Mês</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${dados.map(d => `
+                  <tr class="border-b border-slate-700 hover:bg-slate-900/40 ${d.total===0?'opacity-40':''}">
+                    <td class="px-3 py-2 font-semibold ${d.total>0?'text-white':'text-slate-600'}">${d.nome}</td>
+                    <td class="text-right px-3 py-2 text-blue-400 font-semibold">${d.comNF>0?'R$ '+fmt(d.comNF):'-'}</td>
+                    <td class="text-right px-3 py-2 text-blue-300 text-xs">${d.nfe>0?'R$ '+fmt(d.nfe):'-'}</td>
+                    <td class="text-right px-3 py-2 text-cyan-300 text-xs">${d.nfse>0?'R$ '+fmt(d.nfse):'-'}</td>
+                    <td class="text-right px-3 py-2 text-yellow-400 font-semibold">${d.semNF>0?'R$ '+fmt(d.semNF):'-'}</td>
+                    <td class="text-right px-3 py-2 font-bold ${d.total>0?'text-white':'text-slate-600'}">${d.total>0?'R$ '+fmt(d.total):'-'}</td>
+                  </tr>`).join('')}
+              </tbody>
+              <tfoot>
+                <tr class="border-t-2 border-slate-500 bg-slate-900">
+                  <td class="px-3 py-3 font-black text-white">TOTAL ${ano}</td>
+                  <td class="text-right px-3 py-3 font-black text-blue-400">R$ ${fmt(totalComNF)}</td>
+                  <td class="text-right px-3 py-3 font-bold text-blue-300 text-xs">R$ ${fmt(totalNFe)}</td>
+                  <td class="text-right px-3 py-3 font-bold text-cyan-300 text-xs">R$ ${fmt(totalNFSe)}</td>
+                  <td class="text-right px-3 py-3 font-black text-yellow-400">R$ ${fmt(totalSemNF)}</td>
+                  <td class="text-right px-3 py-3 font-black text-white">R$ ${fmt(totalGeral)}</td>
+                </tr>
+              </tfoot>
+            </table>`;
+
+          // Guarda dados para exportação
+          this._dasnDados = { ano, dados, totalComNF, totalSemNF, totalNFe, totalNFSe, totalGeral };
+        },
+
+        exportarDASNExcel() {
+          if (!this._dasnDados) { App.ui.mostrarToast('Gere o relatório primeiro','erro'); return; }
+          const { ano, dados, totalComNF, totalSemNF, totalNFe, totalNFSe, totalGeral } = this._dasnDados;
+          const cfg = App.state.configuracoes;
+          const wb  = XLSX.utils.book_new();
+          const ws  = XLSX.utils.aoa_to_sheet([
+            [`RELATÓRIO MEI — DASN-SIMEI ${ano}`],
+            [cfg.nome||'', cfg.cnpj ? `CNPJ: ${cfg.cnpj}` : ''],
+            [],
+            ['Mês', 'Com Nota Fiscal', 'NFe (Produtos)', 'NFSe (Serviços)', 'Sem Nota Fiscal', 'Total'],
+            ...dados.map(d => [d.nome, d.comNF, d.nfe, d.nfse, d.semNF, d.total]),
+            [],
+            ['TOTAL', totalComNF, totalNFe, totalNFSe, totalSemNF, totalGeral],
+          ]);
+          ws['!cols'] = [{wch:14},{wch:16},{wch:16},{wch:16},{wch:16},{wch:14}];
+          XLSX.utils.book_append_sheet(wb, ws, `DASN ${ano}`);
+          XLSX.writeFile(wb, `DASN_MEI_${ano}.xlsx`);
+          App.ui.mostrarToast('Excel exportado!','sucesso');
+        },
+
+        imprimirDASN() {
+          if (!this._dasnDados) { App.ui.mostrarToast('Gere o relatório primeiro','erro'); return; }
+          const { ano, dados, totalComNF, totalSemNF, totalNFe, totalNFSe, totalGeral } = this._dasnDados;
+          const cfg  = App.state.configuracoes;
+          const fmt  = App.utils.formatarMoeda.bind(App.utils);
+          const hoje = new Date().toLocaleDateString('pt-BR');
+          const limiteMEI = App.config.limiteMEI || 81000;
+          const perc = ((totalGeral/limiteMEI)*100).toFixed(1);
+
+          const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>DASN-SIMEI ${ano} — ${cfg.nome||''}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;color:#1e293b;padding:32px}
+.no-print{text-align:center;padding:16px;background:#f1f5f9;margin-bottom:24px;border-radius:8px}
+.no-print button{background:#4f46e5;color:white;border:none;padding:10px 28px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+@media print{.no-print{display:none}body{background:white;padding:16px}}
+h1{font-size:22px;font-weight:900;color:#1e293b;margin-bottom:4px}
+.sub{font-size:13px;color:#64748b;margin-bottom:24px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.kpi{background:white;border-radius:10px;padding:14px;border:1px solid #e2e8f0;text-align:center}
+.kpi-label{font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px}
+.kpi-val{font-size:18px;font-weight:800}
+table{width:100%;border-collapse:collapse;background:white;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+th{background:#1e293b;color:white;padding:10px 12px;text-align:right;font-size:12px;font-weight:600}
+th:first-child{text-align:left}
+td{padding:9px 12px;text-align:right;font-size:13px;border-bottom:1px solid #f1f5f9}
+td:first-child{text-align:left;font-weight:600}
+tr:hover td{background:#f8fafc}
+.total-row td{background:#1e293b;color:white;font-weight:800;font-size:14px}
+.zero{color:#cbd5e1}
+.rodape{text-align:center;font-size:11px;color:#94a3b8;margin-top:20px}
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div>
+<h1>🏛️ Relatório MEI — DASN-SIMEI ${ano}</h1>
+<div class="sub">${cfg.nome||''}${cfg.cnpj?' &nbsp;|&nbsp; CNPJ: '+cfg.cnpj:''} &nbsp;|&nbsp; Emitido em ${hoje}</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">Receita Total</div><div class="kpi-val" style="color:#1e293b">R$ ${fmt(totalGeral)}</div></div>
+  <div class="kpi"><div class="kpi-label">Com Nota Fiscal</div><div class="kpi-val" style="color:#2563eb">R$ ${fmt(totalComNF)}</div></div>
+  <div class="kpi"><div class="kpi-label">Sem Nota Fiscal</div><div class="kpi-val" style="color:#d97706">R$ ${fmt(totalSemNF)}</div></div>
+  <div class="kpi"><div class="kpi-label">Limite MEI (${perc}%)</div><div class="kpi-val" style="color:${totalGeral>limiteMEI*0.9?'#dc2626':'#16a34a'}">R$ ${fmt(limiteMEI-totalGeral)}</div></div>
+</div>
+
+<table>
+  <thead><tr>
+    <th style="text-align:left">Mês</th>
+    <th>Com NF (Total)</th>
+    <th>NFe — Produtos</th>
+    <th>NFSe — Serviços</th>
+    <th>Sem Nota Fiscal</th>
+    <th>Total do Mês</th>
+  </tr></thead>
+  <tbody>
+    ${dados.map(d => `<tr class="${d.total===0?'zero':''}">
+      <td>${d.nome}</td>
+      <td>${d.comNF>0?'R$ '+fmt(d.comNF):'-'}</td>
+      <td>${d.nfe>0?'R$ '+fmt(d.nfe):'-'}</td>
+      <td>${d.nfse>0?'R$ '+fmt(d.nfse):'-'}</td>
+      <td>${d.semNF>0?'R$ '+fmt(d.semNF):'-'}</td>
+      <td>${d.total>0?'R$ '+fmt(d.total):'-'}</td>
+    </tr>`).join('')}
+  </tbody>
+  <tfoot>
+    <tr class="total-row">
+      <td>TOTAL ${ano}</td>
+      <td>R$ ${fmt(totalComNF)}</td>
+      <td>R$ ${fmt(totalNFe)}</td>
+      <td>R$ ${fmt(totalNFSe)}</td>
+      <td>R$ ${fmt(totalSemNF)}</td>
+      <td>R$ ${fmt(totalGeral)}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="rodape">IDEAL ERP MEI PRO — IdealTech &nbsp;•&nbsp; ${hoje}</div>
+</body></html>`;
+
+          const w = window.open('','_blank');
+          if (w) { w.document.write(html); w.document.close(); }
+          else App.ui.mostrarToast('Permita pop-ups','erro');
         },
 
         exportarExcel() {
