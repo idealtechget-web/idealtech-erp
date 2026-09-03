@@ -1579,10 +1579,17 @@
           </div>
         </div>
         <div class="flex items-center gap-2 mt-1 bg-slate-900 rounded-lg px-3 py-2 border border-cyan-800/40">
-          <input type="checkbox" id="receitaRendimento" onchange="if(this.checked)document.getElementById('receitaAporte').checked=false" class="w-4 h-4 accent-cyan-500">
+          <input type="checkbox" id="receitaRendimento" onchange="if(this.checked){document.getElementById('receitaAporte').checked=false;document.getElementById('receitaEmprestimo').checked=false;}" class="w-4 h-4 accent-cyan-500">
           <div>
             <span class="text-sm text-cyan-300 font-bold">📈 Rendimento / Aplicação Financeira</span>
             <p class="text-xs text-slate-500 mt-0.5">Juros, CDI, rendimento de conta — não é venda, não conta no MEI</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 mt-1 bg-slate-900 rounded-lg px-3 py-2 border border-violet-800/40">
+          <input type="checkbox" id="receitaEmprestimo" onchange="if(this.checked){document.getElementById('receitaAporte').checked=false;document.getElementById('receitaRendimento').checked=false;}" class="w-4 h-4 accent-violet-500">
+          <div>
+            <span class="text-sm text-violet-300 font-bold">🔄 Devolução / Amortização de Empréstimo</span>
+            <p class="text-xs text-slate-500 mt-0.5">Recebimento de empréstimo concedido — movimentação patrimonial, não é receita</p>
           </div>
         </div>
         <button onclick="App.financeiro.salvarReceita()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded shadow transition">Salvar Receita</button>
@@ -2467,7 +2474,8 @@
         isReceitaOperacional(r) {
           return r.origem !== 'TRANSFERENCIA' &&
                  !r.aporte &&
-                 !r.rendimento;
+                 !r.rendimento &&
+                 !r.emprestimo;
         },
 
         // Despesa operacional = exclui transferências
@@ -4154,6 +4162,28 @@ Importar como Receita no Financeiro?`)) return;
                       <td class="text-right px-3 py-1.5 text-xs text-green-300 bg-slate-800">R$ ${fmt(dados.reduce((a,d)=>a+(d.recCatMap[cat]||0),0))}</td>
                     </tr>`).join('')}
                     <!-- Rendimentos financeiros -->
+                    ${(() => {
+                      const temEmprestimo = comDados.some(d =>
+                        App.state.recebimentos.some(r => (r.data||'').startsWith(d.ms) && r.emprestimo && r.status==='recebido')
+                      );
+                      if (temEmprestimo) {
+                        const fmt2 = App.utils.formatarMoeda.bind(App.utils);
+                        const empMes = comDados.map(d =>
+                          App.state.recebimentos.filter(r=>(r.data||'').startsWith(d.ms)&&r.emprestimo&&r.status==='recebido').reduce((a,b)=>a+Number(b.valor||0),0)
+                        );
+                        const empTotal = empMes.reduce((a,b)=>a+b,0);
+                        document.getElementById('dasnTabela'); // placeholder para evitar lint
+                        return `<tr class="bg-slate-900/50">
+                          <td colspan="${comDados.length+2}" class="px-3 py-1.5 text-xs font-black text-violet-400 uppercase tracking-wider">▶ DEVOLUÇÕES / AMORTIZAÇÕES</td>
+                        </tr>
+                        <tr class="border-b border-slate-800 hover:bg-slate-800/30">
+                          <td class="px-3 py-2 text-slate-300 text-xs">Devolução de Empréstimo Concedido</td>
+                          ${comDados.map((_,i)=>`<td class="text-right px-2 py-2 text-xs text-violet-400">${empMes[i]>0?'R$ '+fmt2(empMes[i]):'-'}</td>`).join('')}
+                          <td class="text-right px-3 py-2 text-xs font-bold text-violet-400 bg-slate-800">R$ ${fmt2(empTotal)}</td>
+                        </tr>`;
+                      }
+                      return '';
+                    })()}
                     ${(() => {
                       const temRendimento = comDados.some(d => {
                         return App.state.recebimentos.some(r => (r.data||'').startsWith(d.ms) && r.rendimento && r.status==='recebido');
@@ -7733,6 +7763,8 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaAporte').checked             = !!r.aporte;
             if (document.getElementById('receitaRendimento'))
               document.getElementById('receitaRendimento').checked = !!r.rendimento;
+            if (document.getElementById('receitaEmprestimo'))
+              document.getElementById('receitaEmprestimo').checked = !!r.emprestimo;
             document.getElementById('receitaContaId').value              = r.contaId || '';
             App.ui.toggleParcelas('receita');
             if (document.getElementById('receitaParcelasQtd') && r.parcelas > 1)
@@ -7763,6 +7795,8 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaAporte').checked       = false;
             if (document.getElementById('receitaRendimento'))
               document.getElementById('receitaRendimento').checked = false;
+            if (document.getElementById('receitaEmprestimo'))
+              document.getElementById('receitaEmprestimo').checked = false;
             document.getElementById('receitaFormaPagamento').value = 'Pix';
             App.ui.toggleParcelas('receita');
             if (document.getElementById('receitaParcelasQtd')) document.getElementById('receitaParcelasQtd').value = '1';
@@ -7812,6 +7846,7 @@ ${tl.length?`<!-- Timeline -->
               origem:         'Manual',
               aporte:         document.getElementById('receitaAporte')?.checked || false,
               rendimento:     document.getElementById('receitaRendimento')?.checked || false,
+              emprestimo:     document.getElementById('receitaEmprestimo')?.checked || false,
               parcelas:       forma === 'Cartão' ? parseInt(document.getElementById('receitaParcelasQtd')?.value||'1', 10) : 1,
               taxa:           taxa,
               valorBruto:     valor, // guarda o valor original antes da taxa
@@ -8043,6 +8078,7 @@ ${tl.length?`<!-- Timeline -->
                     <span class="text-xs bg-slate-700 px-2 py-0.5 rounded">${r.formaPagamento||'Pix'}${r.parcelas > 1 ? ` ${r.parcelas}x` : ''}</span>
                     ${r.aporte ? '<span class="bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded font-bold">💰 Aporte</span>' : ''}
                     ${r.rendimento ? '<span class="bg-cyan-900/50 text-cyan-300 px-2 py-0.5 rounded font-bold">📈 Rendimento</span>' : ''}
+                    ${r.emprestimo ? '<span class="bg-violet-900/50 text-violet-300 px-2 py-0.5 rounded font-bold">🔄 Devolução</span>' : ''}
                     ${r.contratoId ? '<span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded font-bold">📋 Contrato</span>' : ''}
                     ${r.nf_emitida ? `<span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">${r.nf_tipo||'NFe'} ${App.utils.escapeHTML(r.nf_numero||'S/N')}</span>` : ''}
                     ${r.obs ? `<span class="text-slate-400 italic text-xs">💬 ${App.utils.escapeHTML(r.obs)}</span>` : ''}
@@ -9145,6 +9181,7 @@ ${tl.length?`<!-- Timeline -->
         recorrente: x.recorrente || false,
         aporte:     x.aporte || false,
         rendimento: x.rendimento || false,
+        emprestimo: x.emprestimo || false,
         parcelas:   x.parcelas || 1,
         taxa:       x.taxa || 0,
         valorBruto: x.valor_bruto || x.valor || 0,
@@ -9268,6 +9305,7 @@ ${tl.length?`<!-- Timeline -->
           recorrente:  r.recorrente||false,
           aporte:      r.aporte||false,
           rendimento:  r.rendimento||false,
+          emprestimo:  r.emprestimo||false,
           parcelas:    r.parcelas||1,
           taxa:        r.taxa||0,
           valor_bruto: r.valorBruto||r.valor||0 };
