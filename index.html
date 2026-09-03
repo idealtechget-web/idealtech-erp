@@ -1572,10 +1572,17 @@
           <span class="text-sm text-slate-300">Já está pago/recebido?</span>
         </div>
         <div class="flex items-center gap-2 mt-1 bg-slate-900 rounded-lg px-3 py-2 border border-amber-800/40">
-          <input type="checkbox" id="receitaAporte" class="w-4 h-4 accent-amber-500">
+          <input type="checkbox" id="receitaAporte" onchange="if(this.checked)document.getElementById('receitaRendimento').checked=false" class="w-4 h-4 accent-amber-500">
           <div>
             <span class="text-sm text-amber-300 font-bold">💰 Aporte de Capital</span>
-            <p class="text-xs text-slate-500 mt-0.5">Não conta no limite de faturamento MEI (R$ 81.000/ano)</p>
+            <p class="text-xs text-slate-500 mt-0.5">Entrada de capital próprio — não conta no limite MEI</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 mt-1 bg-slate-900 rounded-lg px-3 py-2 border border-cyan-800/40">
+          <input type="checkbox" id="receitaRendimento" onchange="if(this.checked)document.getElementById('receitaAporte').checked=false" class="w-4 h-4 accent-cyan-500">
+          <div>
+            <span class="text-sm text-cyan-300 font-bold">📈 Rendimento / Aplicação Financeira</span>
+            <p class="text-xs text-slate-500 mt-0.5">Juros, CDI, rendimento de conta — não é venda, não conta no MEI</p>
           </div>
         </div>
         <button onclick="App.financeiro.salvarReceita()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded shadow transition">Salvar Receita</button>
@@ -2455,6 +2462,19 @@
           return c ? c.nome : '';
         },
 
+        // Receita operacional = faturamento real da atividade MEI
+        // Exclui: transferências, aportes, rendimentos financeiros
+        isReceitaOperacional(r) {
+          return r.origem !== 'TRANSFERENCIA' &&
+                 !r.aporte &&
+                 !r.rendimento;
+        },
+
+        // Despesa operacional = exclui transferências
+        isDespesaOperacional(g) {
+          return g.origem !== 'TRANSFERENCIA';
+        },
+
         getClienteDoc(id, nomeCliente) {
           // Busca por id ou por nome
           const c = id
@@ -2791,15 +2811,15 @@
           const anoStr = mesStr.slice(0,4);
 
           // Mês — realizados
-          const recPago = App.state.recebimentos.filter(r => (r.data||'').startsWith(mesStr) && r.status === 'recebido');
-          const gasPago = App.state.gastos.filter(g => (g.data||'').startsWith(mesStr) && g.status === 'pago');
+          const recPago = App.state.recebimentos.filter(r => (r.data||'').startsWith(mesStr) && r.status === 'recebido' && App.utils.isReceitaOperacional(r));
+          const gasPago = App.state.gastos.filter(g => (g.data||'').startsWith(mesStr) && g.status === 'pago' && App.utils.isDespesaOperacional(g));
           const totRec  = recPago.reduce((a,b) => a + Number(b.valor||0), 0);
           const totGas  = gasPago.reduce((a,b) => a + Number(b.valor||0), 0);
           const lucro   = totRec - totGas;
 
           // Mês — pendentes
-          const recPend = App.state.recebimentos.filter(r => (r.data||'').startsWith(mesStr) && r.status !== 'recebido');
-          const gasPend = App.state.gastos.filter(g => (g.data||'').startsWith(mesStr) && g.status !== 'pago');
+          const recPend = App.state.recebimentos.filter(r => (r.data||'').startsWith(mesStr) && r.status !== 'recebido' && App.utils.isReceitaOperacional(r));
+          const gasPend = App.state.gastos.filter(g => (g.data||'').startsWith(mesStr) && g.status !== 'pago' && App.utils.isDespesaOperacional(g));
           const totRecPend = recPend.reduce((a,b) => a + Number(b.valor||0), 0);
           const totGasPend = gasPend.reduce((a,b) => a + Number(b.valor||0), 0);
           const lucroPrev  = (totRec + totRecPend) - (totGas + totGasPend);
@@ -2811,8 +2831,8 @@
           const dAnt  = new Date(anoM, mesM - 2, 1);
           const mesAnt = `${dAnt.getFullYear()}-${String(dAnt.getMonth()+1).padStart(2,'0')}`;
           const mesAntNome = App.config.meses[dAnt.getMonth()].slice(0,3);
-          const totRecAnt = App.state.recebimentos.filter(r=>(r.data||'').startsWith(mesAnt)&&r.status==='recebido').reduce((a,b)=>a+Number(b.valor||0),0);
-          const totGasAnt = App.state.gastos.filter(g=>(g.data||'').startsWith(mesAnt)&&g.status==='pago').reduce((a,b)=>a+Number(b.valor||0),0);
+          const totRecAnt = App.state.recebimentos.filter(r=>(r.data||'').startsWith(mesAnt)&&r.status==='recebido'&&App.utils.isReceitaOperacional(r)).reduce((a,b)=>a+Number(b.valor||0),0);
+          const totGasAnt = App.state.gastos.filter(g=>(g.data||'').startsWith(mesAnt)&&g.status==='pago'&&App.utils.isDespesaOperacional(g)).reduce((a,b)=>a+Number(b.valor||0),0);
           const lucroAnt  = totRecAnt - totGasAnt;
 
           const setT = (id, txt, cls) => { const el=document.getElementById(id); if(el){el.textContent=txt; el.className='text-xs font-bold px-2 py-0.5 rounded-full '+(cls||'');} };
@@ -2850,8 +2870,8 @@
 
           // Ano — realizados + pendentes
           // Aportes de capital não contam no limite MEI
-          const recAno     = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status === 'recebido' && !r.aporte);
-          const recAnoPend = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status !== 'recebido' && !r.aporte);
+          const recAno     = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status === 'recebido' && App.utils.isReceitaOperacional(r));
+          const recAnoPend = App.state.recebimentos.filter(r => (r.data||'').startsWith(anoStr) && r.status !== 'recebido' && App.utils.isReceitaOperacional(r));
           const totAno     = recAno.reduce((a,b) => a + Number(b.valor||0), 0);
           const totAnoPend = recAnoPend.reduce((a,b) => a + Number(b.valor||0), 0);
           const rest       = App.config.limiteMEI - totAno;
@@ -2884,7 +2904,7 @@
           const alertas = [];
 
           // MEI — 75% e 90%
-          const totAno = App.state.recebimentos.filter(r=>(r.data||'').startsWith(anoStr)&&r.status==='recebido'&&!r.aporte).reduce((a,b)=>a+Number(b.valor||0),0);
+          const totAno = App.state.recebimentos.filter(r=>(r.data||'').startsWith(anoStr)&&r.status==='recebido'&&App.utils.isReceitaOperacional(r)).reduce((a,b)=>a+Number(b.valor||0),0);
           const perc   = totAno / App.config.limiteMEI * 100;
           if (perc >= 90) alertas.push({ tipo:'erro',  icone:'🚨', msg: `MEI em <strong>${perc.toFixed(1)}%</strong> do limite anual — faltam apenas R$ ${App.utils.formatarMoeda(App.config.limiteMEI - totAno)}!` });
           else if (perc >= 75) alertas.push({ tipo:'aviso', icone:'⚠️', msg: `MEI em <strong>${perc.toFixed(1)}%</strong> do limite anual — fique de olho no faturamento.` });
@@ -2945,8 +2965,8 @@
 
         atualizarPizzas() {
           const mesStr = App.utils.getMesSelecionado();
-          const recs   = App.state.recebimentos.filter(r=>(r.data||'').startsWith(mesStr));
-          const gas    = App.state.gastos.filter(g=>(g.data||'').startsWith(mesStr));
+          const recs   = App.state.recebimentos.filter(r=>(r.data||'').startsWith(mesStr) && App.utils.isReceitaOperacional(r));
+          const gas    = App.state.gastos.filter(g=>(g.data||'').startsWith(mesStr) && App.utils.isDespesaOperacional(g));
           const fmt    = App.utils.formatarMoeda.bind(App.utils);
           const esc    = App.utils.escapeHTML.bind(App.utils);
 
@@ -3031,7 +3051,7 @@
             const d   = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
             const ms  = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
             meses.push(App.config.meses[d.getMonth()].slice(0,3));
-            receitas.push(App.state.recebimentos.filter(r => (r.data||'').startsWith(ms) && r.status==='recebido').reduce((a,b)=>a+Number(b.valor||0),0));
+            receitas.push(App.state.recebimentos.filter(r => (r.data||'').startsWith(ms) && r.status==='recebido' && App.utils.isReceitaOperacional(r)).reduce((a,b)=>a+Number(b.valor||0),0));
             despesas.push(App.state.gastos.filter(g => (g.data||'').startsWith(ms) && g.status==='pago').reduce((a,b)=>a+Number(b.valor||0),0));
           }
 
@@ -4048,8 +4068,8 @@ Importar como Receita no Financeiro?`)) return;
             const meses = Array.from({length:12},(_,i)=>i+1);
             const dados = meses.map(m => {
               const ms = `${ano}-${String(m).padStart(2,'0')}`;
-              const recs  = App.state.recebimentos.filter(r=>(r.data||'').startsWith(ms) && !r.aporte);
-              const gas   = App.state.gastos.filter(g=>(g.data||'').startsWith(ms));
+              const recs  = App.state.recebimentos.filter(r=>(r.data||'').startsWith(ms) && App.utils.isReceitaOperacional(r));
+              const gas   = App.state.gastos.filter(g=>(g.data||'').startsWith(ms) && App.utils.isDespesaOperacional(g));
               const recBruto  = recs.reduce((a,b)=>a+Number(b.valor||0),0);
               const recPago   = recs.filter(r=>r.status==='recebido').reduce((a,b)=>a+Number(b.valor||0),0);
               const desp      = gas.reduce((a,b)=>a+Number(b.valor||0),0);
@@ -4120,10 +4140,10 @@ Importar como Receita no Financeiro?`)) return;
                   <tbody>
                     <!-- Receitas -->
                     <tr class="bg-slate-900/50">
-                      <td colspan="${comDados.length+2}" class="px-3 py-1.5 text-xs font-black text-green-400 uppercase tracking-wider">▶ RECEITAS</td>
+                      <td colspan="${comDados.length+2}" class="px-3 py-1.5 text-xs font-black text-green-400 uppercase tracking-wider">▶ RECEITAS OPERACIONAIS</td>
                     </tr>
                     <tr class="border-b border-slate-800 hover:bg-slate-800/30">
-                      <td class="px-3 py-2 text-slate-300 text-xs">Receita Bruta</td>
+                      <td class="px-3 py-2 text-slate-300 text-xs">Receita Bruta (Vendas/Serviços)</td>
                       ${comDados.map(d=>`<td class="text-right px-2 py-2 text-xs font-semibold text-green-400">${d.recBruto>0?'R$ '+fmt(d.recBruto):'-'}</td>`).join('')}
                       <td class="text-right px-3 py-2 text-xs font-black text-green-400 bg-slate-800">R$ ${fmt(totRec)}</td>
                     </tr>
@@ -4133,6 +4153,26 @@ Importar como Receita no Financeiro?`)) return;
                       ${comDados.map(d=>`<td class="text-right px-2 py-1.5 text-xs text-green-300">${d.recCatMap[cat]>0?'R$ '+fmt(d.recCatMap[cat]):'-'}</td>`).join('')}
                       <td class="text-right px-3 py-1.5 text-xs text-green-300 bg-slate-800">R$ ${fmt(dados.reduce((a,d)=>a+(d.recCatMap[cat]||0),0))}</td>
                     </tr>`).join('')}
+                    <!-- Rendimentos financeiros -->
+                    ${(() => {
+                      const temRendimento = comDados.some(d => {
+                        return App.state.recebimentos.some(r => (r.data||'').startsWith(d.ms) && r.rendimento && r.status==='recebido');
+                      });
+                      if (!temRendimento) return '';
+                      const fmt = App.utils.formatarMoeda.bind(App.utils);
+                      const rendMes = comDados.map(d =>
+                        App.state.recebimentos.filter(r=>(r.data||'').startsWith(d.ms)&&r.rendimento&&r.status==='recebido').reduce((a,b)=>a+Number(b.valor||0),0)
+                      );
+                      const rendTotal = rendMes.reduce((a,b)=>a+b,0);
+                      return `<tr class="bg-slate-900/50">
+                        <td colspan="${comDados.length+2}" class="px-3 py-1.5 text-xs font-black text-cyan-400 uppercase tracking-wider">▶ RECEITAS FINANCEIRAS / RENDIMENTOS</td>
+                      </tr>
+                      <tr class="border-b border-slate-800 hover:bg-slate-800/30">
+                        <td class="px-3 py-2 text-slate-300 text-xs">Rendimentos / Aplicações</td>
+                        ${comDados.map((_,i)=>`<td class="text-right px-2 py-2 text-xs text-cyan-400">${rendMes[i]>0?'R$ '+fmt(rendMes[i]):'-'}</td>`).join('')}
+                        <td class="text-right px-3 py-2 text-xs font-bold text-cyan-400 bg-slate-800">R$ ${fmt(rendTotal)}</td>
+                      </tr>`;
+                    })()}
                     <!-- Despesas por categoria -->
                     <tr class="bg-slate-900/50">
                       <td colspan="${comDados.length+2}" class="px-3 py-1.5 text-xs font-black text-red-400 uppercase tracking-wider">▼ DESPESAS OPERACIONAIS</td>
@@ -4186,8 +4226,8 @@ Importar como Receita no Financeiro?`)) return;
               ...App.state.gastos.map(g=>(g.data||'').slice(0,4)),
             ])].filter(Boolean).sort();
             const dados = anos.map(a => {
-              const recs  = App.state.recebimentos.filter(r=>(r.data||'').startsWith(a));
-              const gas   = App.state.gastos.filter(g=>(g.data||'').startsWith(a));
+              const recs  = App.state.recebimentos.filter(r=>(r.data||'').startsWith(a) && App.utils.isReceitaOperacional(r));
+              const gas   = App.state.gastos.filter(g=>(g.data||'').startsWith(a) && App.utils.isDespesaOperacional(g));
               const rec   = recs.reduce((x,b)=>x+Number(b.valor||0),0);
               const desp  = gas.reduce((x,b)=>x+Number(b.valor||0),0);
               const imp   = das * 12; const pro = proLabore * 12;
@@ -5004,7 +5044,7 @@ ${el.innerHTML}
           const fim    = document.getElementById('relFim').value;
           if (!inicio || !fim) { App.ui.mostrarToast('Selecione o período','erro'); return; }
 
-          const receitas = App.state.recebimentos.filter(r => r.data >= inicio && r.data <= fim && r.status === 'recebido' && !r.aporte);
+          const receitas = App.state.recebimentos.filter(r => r.data >= inicio && r.data <= fim && r.status === 'recebido' && App.utils.isReceitaOperacional(r));
           const despesas = App.state.gastos.filter(g => g.data >= inicio && g.data <= fim && g.status === 'pago');
           const totalR   = receitas.reduce((a,b) => a + Number(b.valor||0), 0);
           const totalD   = despesas.reduce((a,b) => a + Number(b.valor||0), 0);
@@ -5318,8 +5358,7 @@ ${osRows ? `
           const recs = App.state.recebimentos.filter(r =>
             (r.data||'').startsWith(ano) &&
             r.status === 'recebido' &&
-            !r.aporte &&
-            r.origem !== 'TRANSFERENCIA'
+            App.utils.isReceitaOperacional(r)
           );
 
           // Totais anuais
@@ -7692,6 +7731,8 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaValor').value               = money.formatBR(vBruto);
             document.getElementById('receitaObs').value                  = r.obs || '';
             document.getElementById('receitaAporte').checked             = !!r.aporte;
+            if (document.getElementById('receitaRendimento'))
+              document.getElementById('receitaRendimento').checked = !!r.rendimento;
             document.getElementById('receitaContaId').value              = r.contaId || '';
             App.ui.toggleParcelas('receita');
             if (document.getElementById('receitaParcelasQtd') && r.parcelas > 1)
@@ -7720,6 +7761,8 @@ ${tl.length?`<!-- Timeline -->
             document.getElementById('receitaTemNF').checked        = false;
             document.getElementById('receitaRecebido').checked     = true;
             document.getElementById('receitaAporte').checked       = false;
+            if (document.getElementById('receitaRendimento'))
+              document.getElementById('receitaRendimento').checked = false;
             document.getElementById('receitaFormaPagamento').value = 'Pix';
             App.ui.toggleParcelas('receita');
             if (document.getElementById('receitaParcelasQtd')) document.getElementById('receitaParcelasQtd').value = '1';
@@ -7768,6 +7811,7 @@ ${tl.length?`<!-- Timeline -->
               nf_numero:      temNF ? document.getElementById('receitaNumNF').value.trim() : null,
               origem:         'Manual',
               aporte:         document.getElementById('receitaAporte')?.checked || false,
+              rendimento:     document.getElementById('receitaRendimento')?.checked || false,
               parcelas:       forma === 'Cartão' ? parseInt(document.getElementById('receitaParcelasQtd')?.value||'1', 10) : 1,
               taxa:           taxa,
               valorBruto:     valor, // guarda o valor original antes da taxa
@@ -7998,6 +8042,7 @@ ${tl.length?`<!-- Timeline -->
                     <span class="status-badge ${r.status==='recebido'?'status-pago':'status-pendente'}">${r.status==='recebido'?'Pago':'Pendente'}</span>
                     <span class="text-xs bg-slate-700 px-2 py-0.5 rounded">${r.formaPagamento||'Pix'}${r.parcelas > 1 ? ` ${r.parcelas}x` : ''}</span>
                     ${r.aporte ? '<span class="bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded font-bold">💰 Aporte</span>' : ''}
+                    ${r.rendimento ? '<span class="bg-cyan-900/50 text-cyan-300 px-2 py-0.5 rounded font-bold">📈 Rendimento</span>' : ''}
                     ${r.contratoId ? '<span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded font-bold">📋 Contrato</span>' : ''}
                     ${r.nf_emitida ? `<span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">${r.nf_tipo||'NFe'} ${App.utils.escapeHTML(r.nf_numero||'S/N')}</span>` : ''}
                     ${r.obs ? `<span class="text-slate-400 italic text-xs">💬 ${App.utils.escapeHTML(r.obs)}</span>` : ''}
@@ -9099,6 +9144,7 @@ ${tl.length?`<!-- Timeline -->
         contratoId: x.contrato_id ? String(x.contrato_id) : null,
         recorrente: x.recorrente || false,
         aporte:     x.aporte || false,
+        rendimento: x.rendimento || false,
         parcelas:   x.parcelas || 1,
         taxa:       x.taxa || 0,
         valorBruto: x.valor_bruto || x.valor || 0,
@@ -9221,6 +9267,7 @@ ${tl.length?`<!-- Timeline -->
           contrato_id: r.contratoId||null,
           recorrente:  r.recorrente||false,
           aporte:      r.aporte||false,
+          rendimento:  r.rendimento||false,
           parcelas:    r.parcelas||1,
           taxa:        r.taxa||0,
           valor_bruto: r.valorBruto||r.valor||0 };
