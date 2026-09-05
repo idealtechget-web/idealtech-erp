@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1" defer></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -912,7 +912,7 @@
       </div>
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div class="bg-slate-800 rounded-xl p-5 border border-slate-700 h-fit card-item">
-          <h2 class="text-xl font-bold text-white mb-4"><i class="ph ph-gear"></i>️ Novo Serviço Fixo</h2>
+          <h2 class="text-xl font-bold text-white mb-4"><i class="ph ph-gear"></i> Novo Serviço Fixo</h2>
           <div class="space-y-3">
             <input type="text" id="addNomeServico" placeholder="Ex: Formatação, Troca de Tela" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none" />
             <input type="text" id="addValorServico" placeholder="Valor Padrão (R$)" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none money" />
@@ -1015,7 +1015,7 @@
             <input type="text" id="dreProLabore" placeholder="R$ 0,00" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none text-sm money" oninput="App.dre.renderizar()">
           </div>
           <div>
-            <label class="text-slate-400 text-xs font-bold uppercase mb-1 block"><i class="ph ph-bank"></i>️ DAS Mensal (MEI)</label>
+            <label class="text-slate-400 text-xs font-bold uppercase mb-1 block"><i class="ph ph-bank"></i> DAS Mensal (MEI)</label>
             <input type="text" id="dreDAS" placeholder="R$ 75,90" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none text-sm money" oninput="App.dre.renderizar()">
           </div>
           <div>
@@ -1574,4 +1574,4 @@
           <span class="text-sm text-slate-300">Já está pago/recebido?</span>
         </div>
         <div class="flex items-center gap-2 mt-1 bg-slate-900 rounded-lg px-3 py-2 border border-amber-800/40">
-          <input type="checkbox" id="receitaAporte" onchange="if(this.checked)document.getElementById('receitaRend
+          <input type="checkbox" id="receitaAporte" onchange="if(this.checked)document.getElementById('receita
