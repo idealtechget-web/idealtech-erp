@@ -164,9 +164,10 @@
       #btnMenuMobile { display: none !important; }
       /* Mostra apenas a área de impressão */
       #print-area { display: block !important; visibility: visible !important;
-        position: fixed !important; inset: 0 !important;
+        position: absolute !important; top: 0 !important; left: 0 !important;
+        width: 100% !important;
         background: white !important; z-index: 99999 !important;
-        overflow: auto !important;
+        overflow: visible !important;
       }
       #print-area * { visibility: visible !important; }
       .no-print { display: none !important; }
@@ -836,6 +837,12 @@
                 <option value="12">12x</option>
               </select>
             </div>
+          </div>
+          <div class="mb-3">
+            <label class="text-slate-400 text-xs font-bold uppercase mb-1 block"><i class="ph ph-tag"></i> Categoria</label>
+            <select id="pdvCategoriaId" class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-600 text-white outline-none">
+              <option value="">— Sem categoria —</option>
+            </select>
           </div>
           <div class="mb-4">
             <label class="text-slate-400 text-xs font-bold uppercase mb-1 block"><i class="ph ph-bank"></i> Conta Bancária</label>
@@ -1951,6 +1958,7 @@
 
         <textarea id="clienteObs" placeholder="Observações" rows="3" class="w-full px-3 py-2 rounded bg-slate-800 border border-slate-600 text-white outline-none"></textarea>
         <button onclick="App.clientes.salvar()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded shadow transition"><i class="ph ph-floppy-disk"></i> Salvar Cliente</button>
+        <button onclick="App.clientes.fecharModal()" class="w-full text-slate-400 text-sm hover:text-white py-2 transition">Cancelar</button>
       </div>
     </div>
   </div>
@@ -3119,7 +3127,19 @@
           if (id === 'servicos')   App.servicos.renderizar();
           if (id === 'os')         App.os.renderizar();
           if (id === 'orcamentos')  App.orcamentos.renderizar();
-          if (id === 'pdv')        { App.pdv.filtrarCatalogo(); App.utils.popularSelectContas(['pdvContaId']); App.utils.popularSelectClientes(); }
+          if (id === 'pdv') {
+              App.pdv.filtrarCatalogo();
+              App.utils.popularSelectContas(['pdvContaId']);
+              App.utils.popularSelectClientes();
+              // Popular categorias no PDV
+              const pdvCat = document.getElementById('pdvCategoriaId');
+              if (pdvCat) {
+                pdvCat.innerHTML = '<option value="">— Sem categoria —</option>' +
+                  App.state.categorias
+                    .filter(c => c.tipo === 'receita' || c.tipo === 'RECEITA')
+                    .map(c => `<option value="${c.id}">${c.icone||''} ${App.utils.escapeHTML(c.nome)}</option>`).join('');
+              }
+            }
           if (id === 'financeiro') App.financeiro.renderizar();
           if (id === 'fluxo')      App.fluxo.renderizar();
           if (id === 'contratos')  { App.contratos.renderizar(); App.utils.popularSelectContas(['contratoContaId']); }
@@ -7691,6 +7711,7 @@ ${tl.length?`<!-- Timeline -->
               origem:         'PDV',
               formaPagamento: document.getElementById('pdvFormaPagamento').value,
               contaId:        document.getElementById('pdvContaId').value || null,
+              categoriaId:    document.getElementById('pdvCategoriaId')?.value || null,
               nf_emitida:     temNF,
               nf_tipo:        temNF ? (document.getElementById('pdvTipoNF')?.value||'NFe') : null,
               nf_numero:      temNF ? document.getElementById('pdvNumNF').value.trim() : null,
@@ -7706,16 +7727,17 @@ ${tl.length?`<!-- Timeline -->
             App.state.carrinhoPDV = [];
             document.getElementById('pdvClienteNovo').value = '';
             document.getElementById('pdvContaId').value    = '';
+            if (document.getElementById('pdvCategoriaId')) document.getElementById('pdvCategoriaId').value = '';
             document.getElementById('pdvTemNF').checked     = false;
             document.getElementById('pdvXmlNF').value       = '';
             App.ui.toggleNfCampos('pdv');
             this.atualizarCarrinho();
             App.financeiro.renderizar();
 
-            if (confirm('Deseja imprimir o cupom?')) this.imprimirCupom(venda.id);
-            // Oferecer exportar relação fiscal
-            if (confirm('Deseja exportar a Relação Fiscal para emissão de NF-e?')) this.exportarFiscalVenda(venda);
             App.ui.mostrarToast('Venda finalizada!','sucesso');
+
+            // Modal de pós-venda
+            setTimeout(() => App.pdv.abrirPosVenda(venda, itensVenda, temNF), 400);
           } catch(e) {
             console.error('[PDV] Erro ao finalizar venda:', e);
             App.ui.mostrarToast('Erro ao finalizar venda: ' + (e.message||e),'erro');
@@ -7724,6 +7746,160 @@ ${tl.length?`<!-- Timeline -->
           }
         }
       },
+
+        abrirPosVenda(venda, itens, temNF) {
+          const modal = document.getElementById('modalPosVenda');
+          if (!modal) { this.imprimirCupomVenda(venda, itens); return; }
+          document.getElementById('posVendaNumero').textContent = venda.descricao || '';
+          document.getElementById('posVendaTotal').textContent  = 'R$ ' + App.utils.formatarMoeda(venda.valor);
+          document.getElementById('posVendaFiscal').classList.toggle('hidden', !temNF);
+          modal.classList.remove('hidden');
+          // Armazena para uso nos botões
+          modal._venda = venda;
+          modal._itens = itens;
+        },
+
+        fecharPosVenda() {
+          document.getElementById('modalPosVenda').classList.add('hidden');
+        },
+
+        imprimirCupomVenda(venda, itens) {
+          const cfg   = App.state.configuracoes || {};
+          const fmt   = App.utils.formatarMoeda.bind(App.utils);
+          const hoje  = new Date().toLocaleString('pt-BR');
+          const itensSel = itens || document.getElementById('modalPosVenda')?._itens || [];
+          const vendaSel = venda || document.getElementById('modalPosVenda')?._venda || {};
+
+          const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Cupom de Venda</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',monospace;font-size:12px;padding:20px;max-width:320px;margin:0 auto;background:white;color:#000}
+  .no-print{text-align:center;margin-bottom:16px}
+  .no-print button{background:#2563eb;color:white;border:none;padding:8px 20px;border-radius:6px;font-size:13px;cursor:pointer}
+  @media print{.no-print{display:none}body{padding:4px}}
+  h1{text-align:center;font-size:14px;font-weight:bold;margin-bottom:4px}
+  .sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px}
+  .linha{border-top:1px dashed #000;margin:8px 0}
+  .row{display:flex;justify-content:space-between;margin:2px 0;font-size:11px}
+  .total{font-weight:bold;font-size:13px;margin-top:4px}
+  .rodape{text-align:center;font-size:10px;color:#666;margin-top:10px}
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimir Cupom</button></div>
+<h1>${cfg.nome || 'IDEAL ERP'}</h1>
+<div class="sub">${cfg.cnpj ? 'CNPJ: ' + cfg.cnpj : ''}</div>
+<div class="sub">${cfg.endereco || ''}</div>
+<div class="linha"></div>
+<div class="row"><span>CUPOM NÃO FISCAL</span><span>${hoje}</span></div>
+<div class="row"><span>Venda:</span><span>${vendaSel.descricao || ''}</span></div>
+<div class="row"><span>Cliente:</span><span>${vendaSel.cliente || 'Avulso'}</span></div>
+<div class="linha"></div>
+${itensSel.map(i => `
+  <div class="row">
+    <span>${i.nome || i.descricao || ''}${i.qtd > 1 ? ' x' + i.qtd : ''}</span>
+    <span>R$ ${fmt((i.preco||0) * (i.qtd||1))}</span>
+  </div>`).join('')}
+<div class="linha"></div>
+<div class="row total"><span>TOTAL</span><span>R$ ${fmt(vendaSel.valor || 0)}</span></div>
+<div class="row"><span>Pagamento:</span><span>${vendaSel.formaPagamento || 'Pix'}</span></div>
+<div class="linha"></div>
+<div class="rodape">Obrigado pela preferência!<br>${cfg.nome || 'IdealTech'}</div>
+</body></html>`;
+
+          const w = window.open('', '_blank', 'width=400,height=600');
+          if (w) { w.document.write(html); w.document.close(); }
+        },
+
+        exportarFiscalVenda(venda, itens) {
+          const cfg    = App.state.configuracoes || {};
+          const fmt    = App.utils.formatarMoeda.bind(App.utils);
+          const hoje   = new Date().toLocaleString('pt-BR');
+          const itensSel = itens || document.getElementById('modalPosVenda')?._itens || [];
+          const vendaSel = venda || document.getElementById('modalPosVenda')?._venda || {};
+
+          const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relação Fiscal — ${vendaSel.descricao || 'Venda'}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;padding:32px;background:white;color:#1e293b;max-width:800px;margin:0 auto}
+  .no-print{text-align:center;margin-bottom:20px;background:#f1f5f9;padding:12px;border-radius:8px}
+  .no-print button{background:#2563eb;color:white;border:none;padding:10px 24px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:bold}
+  @media print{.no-print{display:none}body{padding:16px}}
+  h1{font-size:18px;font-weight:900;margin-bottom:4px;color:#1e293b}
+  .sub{font-size:12px;color:#64748b;margin-bottom:20px}
+  .aviso{background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:20px;font-size:12px;color:#92400e}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px}
+  th{background:#1e293b;color:white;padding:8px 10px;text-align:left;font-size:12px}
+  td{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px}
+  .total-row{font-weight:bold;font-size:13px;background:#f8fafc}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .info-box{background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0}
+  .info-label{font-size:10px;color:#94a3b8;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+  .info-val{font-size:13px;font-weight:600}
+  .rodape{text-align:center;font-size:11px;color:#94a3b8;margin-top:20px}
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div>
+
+<h1>📋 Relação Fiscal para Emissão de NF</h1>
+<div class="sub">Use este documento para lançar a nota fiscal no seu emissor. Emitido em ${hoje}</div>
+
+<div class="aviso">
+  ⚠️ Este documento é apenas uma relação auxiliar. A nota fiscal deve ser emitida no seu aplicativo fiscal (ex: NF-e Fácil, Fiscal IO, etc.).
+</div>
+
+<div class="info-grid">
+  <div class="info-box">
+    <div class="info-label">Emitente (Sua Empresa)</div>
+    <div class="info-val">${cfg.nome || '—'}</div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">${cfg.cnpj ? 'CNPJ: ' + cfg.cnpj : ''}</div>
+  </div>
+  <div class="info-box">
+    <div class="info-label">Destinatário</div>
+    <div class="info-val">${vendaSel.cliente || 'Consumidor Final'}</div>
+    <div style="font-size:11px;color:#64748b;margin-top:4px">Venda: ${vendaSel.descricao || ''}</div>
+  </div>
+  <div class="info-box">
+    <div class="info-label">Data</div>
+    <div class="info-val">${new Date().toLocaleDateString('pt-BR')}</div>
+  </div>
+  <div class="info-box">
+    <div class="info-label">Forma de Pagamento</div>
+    <div class="info-val">${vendaSel.formaPagamento || 'Pix'}</div>
+  </div>
+</div>
+
+<table>
+  <thead><tr>
+    <th>Produto/Serviço</th>
+    <th>Qtd</th>
+    <th>Valor Unit.</th>
+    <th>Total</th>
+  </tr></thead>
+  <tbody>
+    ${itensSel.map(i => `<tr>
+      <td>${i.nome || i.descricao || '—'}</td>
+      <td>${i.qtd || 1}</td>
+      <td>R$ ${fmt(i.preco || 0)}</td>
+      <td>R$ ${fmt((i.preco||0)*(i.qtd||1))}</td>
+    </tr>`).join('')}
+    <tr class="total-row">
+      <td colspan="3" style="text-align:right">TOTAL</td>
+      <td>R$ ${fmt(vendaSel.valor || 0)}</td>
+    </tr>
+  </tbody>
+</table>
+
+${vendaSel.nf_numero ? `<div style="background:#dbeafe;border-radius:8px;padding:12px;font-size:12px;margin-bottom:16px">
+  <strong>NF Vinculada:</strong> ${vendaSel.nf_tipo || 'NFe'} nº ${vendaSel.nf_numero}
+</div>` : ''}
+
+<div class="rodape">IDEAL ERP MEI PRO — IdealTech &nbsp;•&nbsp; ${hoje}</div>
+</body></html>`;
+
+          const w = window.open('', '_blank');
+          if (w) { w.document.write(html); w.document.close(); }
+          else App.ui.mostrarToast('Permita pop-ups para abrir o documento','erro');
+        },
 
       // -----------------------------------------------------------------------
       // FINANCEIRO
@@ -9142,7 +9318,18 @@ ${tl.length?`<!-- Timeline -->
       },
 
       // ── Normalização: banco → App.state ───────────────────────────────
-      _norm: (arr) => (arr||[]).map(x => ({ ...x, id: String(x.id) })),
+      _norm: (arr) => (arr||[]).map(x => ({
+        ...x, id: String(x.id),
+        // Mapear campos snake_case → camelCase para clientes PF
+        cepPF:        x.cep_pf        || x.cepPF        || '',
+        logradouroPF: x.logradouro_pf || x.logradouroPF || '',
+        numeroPF:     x.numero_pf     || x.numeroPF     || '',
+        complementoPF:x.complemento_pf|| x.complementoPF|| '',
+        bairroPF:     x.bairro_pf     || x.bairroPF     || '',
+        cidadePF:     x.cidade_pf     || x.cidadePF     || '',
+        ufPF:         x.uf_pf         || x.ufPF         || '',
+        nomeFantasia: x.nome_fantasia  || x.nomeFantasia  || '',
+      })),
 
       _normOS: (arr) => (arr||[]).map(x => ({
         id: String(x.id), numero: x.numero, cliente: x.cliente,
@@ -9248,10 +9435,43 @@ ${tl.length?`<!-- Timeline -->
         const uid = this.uid();
         if (!uid) { console.error('[DB] salvarCliente: uid nulo!'); return null; }
         const u = (v) => typeof v==='string' ? v.toUpperCase() : v;
-        const row = { user_id: uid, nome: u(c.nome||''), tipo: c.tipo||'pf',
-          cpf_cnpj: c.cpf_cnpj||c.cpf||c.cnpj||'', razao_social: c.razao_social||'',
-          telefone: c.telefone||'', email: c.email||'', endereco: c.endereco||'',
-          cidade: c.cidade||'', cep: c.cep||'', obs: c.obs||'' };
+        const row = {
+          user_id: uid,
+          nome:          u(c.nome||''),
+          tipo:          c.tipo||'PF',
+          telefone:      c.telefone||'',
+          email:         c.email||'',
+          obs:           u(c.obs||''),
+          ativo:         c.ativo !== false,
+          // Documento
+          cpf_cnpj:      c.cpf_cnpj||c.cpf||c.cnpj||'',
+          cpf:           c.cpf||'',
+          cnpj:          c.cnpj||'',
+          // PJ
+          razao_social:  u(c.razao_social||''),
+          nome_fantasia: u(c.nome_fantasia||''),
+          ie:            u(c.ie||''),
+          im:            u(c.im||''),
+          crt:           u(c.crt||''),
+          // Endereço PJ
+          cep:           c.cep||'',
+          logradouro:    u(c.logradouro||''),
+          numero:        u(c.numero||''),
+          complemento:   u(c.complemento||''),
+          bairro:        u(c.bairro||''),
+          cidade:        u(c.cidade||''),
+          uf:            u(c.uf||''),
+          // Endereço PF
+          cep_pf:        c.cepPF||'',
+          logradouro_pf: u(c.logradouroPF||''),
+          numero_pf:     u(c.numeroPF||''),
+          complemento_pf:u(c.complementoPF||''),
+          bairro_pf:     u(c.bairroPF||''),
+          cidade_pf:     u(c.cidadePF||''),
+          uf_pf:         u(c.ufPF||''),
+          // Legado
+          endereco:      c.endereco||'',
+        };
         if (c.id && !c.id.startsWith('tmp_')) {
           const { data } = await supa.from('clientes').update(row).eq('id', c.id).eq('user_id', uid).select().single();
           return data;
@@ -9493,6 +9713,33 @@ ${tl.length?`<!-- Timeline -->
   })();
   }); // DOMContentLoaded
   </script>
+
+  <!-- MODAL PÓS-VENDA -->
+  <div id="modalPosVenda" class="modal-overlay hidden">
+    <div class="modal-content max-w-sm text-center">
+      <div class="text-5xl mb-3"><i class="ph ph-check-circle text-green-400" style="font-size:3rem"></i></div>
+      <h3 class="text-white text-xl font-bold mb-1">Venda Finalizada!</h3>
+      <p id="posVendaNumero" class="text-slate-400 text-sm mb-1"></p>
+      <p id="posVendaTotal" class="text-green-400 text-3xl font-black mb-6"></p>
+
+      <div class="grid grid-cols-1 gap-3">
+        <button onclick="App.pdv.imprimirCupomVenda(); App.pdv.fecharPosVenda();"
+          class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2">
+          <i class="ph ph-printer"></i> Imprimir Cupom
+        </button>
+        <div id="posVendaFiscal">
+          <button onclick="App.pdv.exportarFiscalVenda(); App.pdv.fecharPosVenda();"
+            class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2">
+            <i class="ph ph-file-text"></i> Gerar Relação Fiscal (NF)
+          </button>
+        </div>
+        <button onclick="App.pdv.fecharPosVenda()"
+          class="w-full text-slate-400 hover:text-white py-2 text-sm transition">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL CONTRATO -->
   <div id="modalContrato" class="modal-overlay hidden">
