@@ -163,10 +163,11 @@
       #sidebarOverlay { display: none !important; }
       #btnMenuMobile { display: none !important; }
       /* Mostra apenas a área de impressão */
+      body { background: white !important; margin: 0 !important; padding: 0 !important; }
       #print-area { display: block !important; visibility: visible !important;
-        position: absolute !important; top: 0 !important; left: 0 !important;
+        position: static !important;
         width: 100% !important;
-        background: white !important; z-index: 99999 !important;
+        background: white !important;
         overflow: visible !important;
       }
       #print-area * { visibility: visible !important; }
